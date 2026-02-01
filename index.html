@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
-        /* --- [基礎與滾動設定] --- */
+        /* --- [基礎樣式] --- */
         body { 
             background-color: #0a0a0a; 
             color: #f5f5f5; 
@@ -32,7 +32,6 @@
             border: 1px solid rgba(255, 255, 255, 0.05); 
         }
 
-        /* 視圖定位：避開手機瀏海 Safe Area */
         .view-section { 
             display: none; 
             position: absolute; 
@@ -46,7 +45,6 @@
             display: block; 
         }
 
-        /* 導覽列安全區域修正 */
         nav {
             padding-top: env(safe-area-inset-top);
             height: calc(64px + env(safe-area-inset-top)) !important;
@@ -57,7 +55,7 @@
             border-bottom: 2px solid #ffffff; 
         }
 
-        /* --- [同步與加載組件] --- */
+        /* --- [加載與登入核心修復] --- */
         #loading-screen {
             position: fixed;
             inset: 0;
@@ -68,18 +66,28 @@
             align-items: center;
             justify-content: center;
             transition: opacity 0.6s ease-out;
-            pointer-events: auto; /* 確保加載層可被點擊 */
+            /* 關鍵：允許加載層接收所有觸控 */
+            pointer-events: auto !important; 
         }
 
-        #sync-indicator { 
-            position: fixed; 
-            bottom: calc(20px + env(safe-area-inset-bottom)); 
-            right: 20px; 
-            font-size: 10px; 
-            color: #ffffff; 
-            opacity: 0; 
-            transition: opacity 0.3s; 
-            z-index: 100; 
+        .login-input {
+            background: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            outline: none;
+            padding: 10px;
+            font-size: 18px;
+            letter-spacing: 0.1em;
+            transition: border-color 0.3s;
+            /* 強制 iOS 允許輸入內容 */
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            -webkit-appearance: none;
+            border-radius: 0;
+        }
+
+        .login-input:focus {
+            border-color: #ffffff;
         }
 
         #ptr-indicator {
@@ -97,30 +105,12 @@
             transform: translateY(-20px);
         }
 
-        /* --- [登入輸入框：修正 PWA 輸入限制] --- */
-        .login-input {
-            background: transparent;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            text-align: center;
-            outline: none;
-            padding: 10px;
-            font-size: 18px;
-            letter-spacing: 0.15em;
-            transition: border-color 0.3s;
-            /* 修正 iOS PWA 無法選取與點擊的問題 */
-            -webkit-user-select: text !important;
-            user-select: text !important;
-            -webkit-appearance: none;
-            border-radius: 0;
-            pointer-events: auto !important;
-        }
-
-        .login-input:focus {
-            border-color: #ffffff;
-        }
-
-        #login-container {
-            pointer-events: auto !important; /* 強制開放點擊穿透 */
+        #ptr-icon { 
+            font-size: 10px; 
+            color: #525252; 
+            tracking: 0.3em; 
+            text-transform: uppercase; 
+            font-weight: bold; 
         }
     </style>
 </head>
@@ -131,7 +121,7 @@
     </div>
 
     <div id="loading-screen">
-        <img src="icon.png" alt="ReDopa Icon" class="w-20 h-20 mb-10 animate-pulse rounded-2xl grayscale">
+        <img src="icon.png" alt="ReDopa" class="w-20 h-20 mb-8 animate-pulse rounded-2xl grayscale">
         
         <div id="boot-container" class="w-64">
             <div class="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
@@ -140,10 +130,10 @@
             <p id="boot-text" class="text-[9px] text-neutral-500 mt-4 tracking-[0.3em] uppercase text-center">Initializing...</p>
         </div>
 
-        <div id="login-container" class="hidden flex flex-col items-center gap-8">
+        <div id="login-container" class="hidden flex flex-col items-center gap-6" onclick="document.getElementById('user-input-field').focus()">
             <p class="text-[10px] text-neutral-500 tracking-[0.4em] uppercase">Identity Required</p>
             <input type="text" id="user-input-field" class="login-input w-48 text-white" placeholder="USERNAME" autocomplete="off" enterkeyhint="done">
-            <button onclick="handleLoginSubmit()" class="mt-4 px-10 py-3 border border-white/10 rounded-full text-[10px] tracking-widest hover:bg-white hover:text-black transition-all active:scale-95">ENTER SYSTEM</button>
+            <button onclick="handleLoginSubmit(event)" class="mt-4 px-10 py-3 border border-white/10 rounded-full text-[10px] tracking-widest hover:bg-white hover:text-black transition-all active:scale-95">ENTER SYSTEM</button>
         </div>
     </div>
 
@@ -230,17 +220,18 @@
                 <ul id="task-manage-list" class="space-y-2 border-t border-white/5 pt-4"></ul>
             </section>
             <section class="glass-card rounded-2xl p-6 border-red-900/20 text-center">
-                <button onclick="resetAll()" class="text-red-500/50 border border-red-900/10 px-4 py-1 rounded text-xs uppercase tracking-widest">Factory Reset</button>
+                <button onclick="resetAll()" class="text-red-500/50 border border-red-900/10 px-4 py-1 rounded text-sm uppercase">Factory Reset</button>
             </section>
         </div>
     </main>
 
     <script>
-        // --- [初始化與變數] ---
+        // --- [Supabase 初始化] ---
         const supabaseUrl = 'https://okesrvqivpqvahmenafx.supabase.co';
         const supabaseKey = 'sb_publishable_QCthF4rOOZH0XUb4KQXUtA_I2LZM1JJ';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
+        // --- [狀態變數] ---
         let state = {
             categories: JSON.parse(localStorage.getItem('ds_categories')) || ['一般'],
             tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
@@ -249,25 +240,23 @@
         const today = new Date().toISOString().split('T')[0];
         let currentUser = localStorage.getItem('redopa_user');
         let growthChart = null, currentChartRange = 'month', currentFilter = null;
+        let isLoadingActive = true; // 追蹤加載畫面狀態
 
-        // --- [並行下拉重新整理核心邏輯：修正 RWD 偏移] ---
+        // --- [下拉重新整理邏輯：增加加載鎖定] ---
         let startY = 0, pullDiff = 0;
         const ptrThreshold = 110;
 
         window.addEventListener('touchstart', (e) => { 
-            if (window.scrollY <= 0) { 
-                startY = e.touches[0].pageY; 
-                pullDiff = 0; 
-            } 
+            if (isLoadingActive) return; // 加載中禁用重整，避免干擾登入
+            if (window.scrollY <= 0) { startY = e.touches[0].pageY; pullDiff = 0; } 
         }, { passive: true });
 
         window.addEventListener('touchmove', (e) => {
-            if (window.scrollY > 0) return;
+            if (isLoadingActive || window.scrollY > 0) return;
             const currentY = e.touches[0].pageY;
             pullDiff = currentY - startY;
 
-            if (pullDiff > 10) {
-                // 指示器動畫修正：同步考慮 Safe Area 偏移
+            if (pullDiff > 20) {
                 const move = Math.min(pullDiff * 0.3, 50);
                 gsap.set('#ptr-indicator', { y: move, opacity: pullDiff / ptrThreshold });
                 document.getElementById('ptr-icon').innerText = pullDiff >= ptrThreshold ? "Release to sync" : "Pull to sync";
@@ -275,11 +264,11 @@
         }, { passive: true });
 
         window.addEventListener('touchend', (e) => {
+            if (isLoadingActive) return;
             if (window.scrollY <= 0 && pullDiff >= ptrThreshold) {
                 gsap.to('#ptr-indicator', { y: 0, opacity: 0, duration: 0.2, onComplete: () => {
-                    const screen = document.getElementById('loading-screen');
-                    screen.style.display = 'flex'; 
-                    screen.style.opacity = '1';
+                    document.getElementById('loading-screen').style.display = 'flex'; 
+                    document.getElementById('loading-screen').style.opacity = '1';
                     location.reload();
                 }});
             } else { 
@@ -288,14 +277,14 @@
             pullDiff = 0;
         });
 
-        // --- [資料庫與同步] ---
+        // --- [雲端與資料功能] ---
         async function loadStateFromServer() {
             if (!currentUser) return;
             showSync(true);
             try {
                 const { data } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
                 if (data?.state_json) state = data.state_json;
-            } catch (err) { console.log("Cloud sync bypassed."); }
+            } catch (err) { console.log("Offline mode."); }
             showSync(false);
         }
 
@@ -313,7 +302,7 @@
             if(el) el.style.opacity = isVisible ? 1 : 0; 
         }
 
-        // --- [系統視圖切換] ---
+        // --- [視圖導覽] ---
         function switchView(view) {
             const sections = ['view-home', 'view-settings', 'view-history'];
             sections.forEach(s => { 
@@ -332,44 +321,37 @@
             }, 250);
         }
 
-        // --- [渲染邏輯] ---
-        function calculateDailyScore(dateStr) { 
-            const doneIds = state.completions[dateStr] || []; 
-            return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0); 
-        }
+        // --- [邏輯計算與 UI] ---
+        function calculateDailyScore(dateStr) { const ids = state.completions[dateStr] || []; return state.tasks.reduce((sum, t) => ids.includes(t.id) ? sum + t.score : sum, 0); }
         function calculateMonthlyScore(yearMonth) { return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0); }
         function setFilter(cat) { currentFilter = cat; renderHome(); }
 
         function renderHome() {
-            const stats = document.getElementById('stats-dashboard');
-            const quest = document.getElementById('quest-container');
+            const stats = document.getElementById('stats-dashboard'), quest = document.getElementById('quest-container');
             if(!stats || !quest) return;
             const doneIds = state.completions[today] || [];
             stats.innerHTML = state.categories.map(cat => {
                 const catScore = state.tasks.filter(t => t.category === cat).reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
-                const isActive = currentFilter === cat ? 'border-white bg-white/10' : 'border-white/5';
-                return `<div onclick="setFilter('${cat}')" class="glass-card px-4 py-2 rounded-xl border ${isActive} cursor-pointer transition-all hover:scale-105 min-w-[80px]">
+                return `<div onclick="setFilter('${cat}')" class="glass-card px-4 py-2 rounded-xl border ${currentFilter===cat?'border-white':'border-white/5'} cursor-pointer min-w-[80px]">
                             <div class="text-[10px] text-neutral-500 uppercase font-bold text-center">${cat}</div>
                             <div class="text-xl font-bold text-white text-center">${catScore}</div>
                         </div>`;
             }).join('');
-            document.getElementById('clear-filter').style.display = currentFilter ? 'block' : 'none';
             const displayCats = currentFilter ? [currentFilter] : state.categories;
             quest.innerHTML = displayCats.map(cat => {
-                const catTasks = state.tasks.filter(t => t.category === cat);
-                if (catTasks.length === 0) return '';
+                const tasks = state.tasks.filter(t => t.category === cat);
+                if (!tasks.length) return '';
                 return `<div class="mb-6"><h3 class="text-[10px] text-neutral-500 mb-2 uppercase tracking-[0.2em] pl-2 border-l border-white/20">${cat}</h3>
-                        <div class="space-y-2">${catTasks.map(t => `
-                            <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer hover:bg-neutral-900/40 transition-colors">
-                                <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
-                                <span class="flex-1 ${doneIds.includes(t.id) ? 'line-through text-neutral-600' : ''}">${t.name}</span>
-                                <span class="text-white font-mono text-sm">${t.score}</span>
-                            </label>`).join('')}</div></div>`;
+                        <div class="space-y-2">${tasks.map(t => `<label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer hover:bg-neutral-900/40">
+                            <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id)?'checked':''} onchange="toggleTask(${t.id})">
+                            <span class="flex-1 ${doneIds.includes(t.id)?'line-through text-neutral-600':''}">${t.name}</span>
+                            <span class="text-white font-mono text-sm">${t.score}</span>
+                        </label>`).join('')}</div></div>`;
             }).join('');
             gsap.to("#total-score", { innerHTML: calculateDailyScore(today), duration: 0.5, snap: { innerHTML: 1 } });
         }
 
-        // --- [管理功能集] ---
+        // --- [管理功能] ---
         function toggleTask(id) { if (!state.completions[today]) state.completions[today] = []; const idx = state.completions[today].indexOf(id); if (idx > -1) state.completions[today].splice(idx, 1); else state.completions[today].push(id); saveState(); renderHome(); }
         function addCategory() { const val = document.getElementById('new-cat-input').value.trim(); if (val && !state.categories.includes(val)) { state.categories.push(val); saveState(); renderSettings(); document.getElementById('new-cat-input').value = ''; } }
         function addTask() { 
@@ -378,7 +360,7 @@
         }
         function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); saveState(); renderSettings(); }
         function deleteCategory(catName) { if (catName === '一般') return alert("不可刪除預設"); if (confirm(`確定刪除「${catName}」？`)) { state.categories = state.categories.filter(c => c !== catName); state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); saveState(); renderSettings(); } }
-        function resetAll() { if (confirm("確定重置數據？")) { localStorage.clear(); location.reload(); } }
+        function resetAll() { if (confirm("重置數據？")) { localStorage.clear(); location.reload(); } }
         function renderSettings() {
             document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
             document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -387,23 +369,17 @@
         function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; }
         function changeRange(range) { currentChartRange = range; document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); document.getElementById(`btn-${range}`).classList.add('active'); renderChart(range); }
         function renderChart(range) {
-            const canvas = document.getElementById('growthChart');
-            if(!canvas) return;
-            const ctx = canvas.getContext('2d');
+            const ctx = document.getElementById('growthChart').getContext('2d');
             let labels = [], scores = [];
-            if (range === 'month') { for (let i = 29; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const ds = d.toISOString().split('T')[0]; labels.push(ds.slice(5)); scores.push(calculateDailyScore(ds)); } }
-            else if (range === 'year') { for (let i = 11; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); const ym = d.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); } }
-            else if (range === 'all') { const dates = Object.keys(state.completions).sort(); if(dates.length) { let curr = new Date(dates[0].slice(0, 7)); while(curr <= new Date()) { const ym = curr.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); curr.setMonth(curr.setMonth() + 1); } } }
+            if (range === 'month') { for (let i = 29; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); labels.push(d.toISOString().split('T')[0].slice(5)); scores.push(calculateDailyScore(d.toISOString().split('T')[0])); } }
+            else if (range === 'year') { for (let i = 11; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); labels.push(d.toISOString().slice(0, 7)); scores.push(calculateMonthlyScore(d.toISOString().slice(0, 7))); } }
             if (growthChart) growthChart.destroy();
-            growthChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels, datasets: [{ data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range==='month'?0:3 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#525252' } }, x: { grid: { display: false }, ticks: { color: '#525252' } } } }
-            });
+            growthChart = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range==='month'?0:3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#525252' } }, x: { grid: { display: false }, ticks: { color: '#525252' } } } } });
         }
 
-        // --- [登入處理與啟動流程] ---
-        async function handleLoginSubmit() {
+        // --- [登入與引導修正邏輯] ---
+        async function handleLoginSubmit(event) {
+            if (event) event.stopPropagation(); // 阻止事件向上冒泡觸發容器點擊
             const input = document.getElementById('user-input-field');
             const username = input.value.trim();
             if (username) {
@@ -417,31 +393,23 @@
             }
         }
 
-        document.getElementById('user-input-field').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.target.blur(); // 強制收起鍵盤
-                handleLoginSubmit();
-            }
-        });
-
         async function bootstrap() {
             const bar = document.getElementById('loading-bar');
-            gsap.to(bar, { width: '20%', duration: 0.8, ease: "power2.out" });
+            isLoadingActive = true; // 鎖定狀態
+            gsap.to(bar, { width: '0%', duration: 0.8, ease: "power2.out" });
 
             if (!currentUser) {
                 document.getElementById('boot-container').classList.add('hidden');
                 const loginBox = document.getElementById('login-container');
                 loginBox.classList.remove('hidden');
-                
                 gsap.fromTo(loginBox, { opacity: 0, y: 20 }, { 
                     opacity: 1, y: 0, duration: 0.6,
                     onComplete: () => {
-                        // 針對 iOS PWA 的對焦修正：延遲 300ms 並模擬點擊
+                        // iOS PWA 對焦強化
                         setTimeout(() => {
                             const input = document.getElementById('user-input-field');
                             input.focus();
-                            input.click(); 
-                        }, 300);
+                        }, 500);
                     }
                 });
             } else {
@@ -451,20 +419,22 @@
 
         async function continueBootstrap() {
             const bar = document.getElementById('loading-bar');
+            document.getElementById('boot-text').innerText = "Syncing Neural Data...";
             gsap.to(bar, { width: '60%', duration: 0.5 });
             await loadStateFromServer();
-            gsap.to(bar, { 
-                width: '100%', duration: 0.4, 
-                onComplete: () => {
-                    setTimeout(() => {
-                        const screen = document.getElementById('loading-screen');
-                        if(screen) {
-                            screen.style.opacity = '0';
-                            setTimeout(() => { screen.style.display = 'none'; renderHome(); }, 600);
-                        }
-                    }, 0);
-                }
-            });
+            gsap.to(bar, { width: '100%', duration: 0.4, onComplete: () => {
+                setTimeout(() => {
+                    const screen = document.getElementById('loading-screen');
+                    if(screen) {
+                        screen.style.opacity = '0';
+                        setTimeout(() => { 
+                            screen.style.display = 'none'; 
+                            isLoadingActive = false; // 解除鎖定，開放下拉重整
+                            renderHome(); 
+                        }, 600);
+                    }
+                }, 0);
+            }});
         }
 
         bootstrap();
