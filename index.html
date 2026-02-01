@@ -104,30 +104,35 @@
         }
 
         /* --- [登入輸入框：PWA 終極修正版] --- */
-        .login-input {
-            background: transparent;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            text-align: center;
-            outline: none;
-            padding: 10px;
-            font-size: 18px; /* 必須大於 16px 避免 iOS 自動縮放 */
-            letter-spacing: 0.15em;
-            transition: border-color 0.3s;
-            
-            /* 修正 iOS PWA 無法選取與點擊的問題 */
-            -webkit-user-select: text !important;
-            user-select: text !important;
-            -webkit-appearance: none;
-            border-radius: 0;
-            
-            /* 關鍵：提升層級並開啟硬體加速 */
-            position: relative;
-            z-index: 10000; 
-            transform: translate3d(0,0,0);
-            
-            /* 關鍵：告訴瀏覽器這是一個單純的點擊操作，不要等待手勢 */
-            touch-action: manipulation; 
-        }
+        /* --- 修正後的 .login-input --- */
+.login-input {
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    text-align: center;
+    outline: none;
+    padding: 10px;
+    font-size: 18px;
+    letter-spacing: 0.15em;
+    transition: border-color 0.3s;
+    
+    /* === 關鍵修正開始 === */
+    /* 1. 確保 iOS 允許文字選取 */
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    
+    /* 2. 禁止 iOS 雙擊縮放，並優化點擊判定 */
+    touch-action: manipulation;
+    
+    /* 3. 修復 iOS PWA 渲染層級問題 (避免輸入框被當作背景) */
+    transform: translate3d(0, 0, 0); 
+    
+    /* 4. 強制外觀重置 */
+    -webkit-appearance: none;
+    border-radius: 0;
+    pointer-events: auto !important;
+    z-index: 10001; /* 確保層級高於遮罩 */
+    /* === 關鍵修正結束 === */
+}
 
         .login-input:focus {
             border-color: #ffffff;
@@ -721,3 +726,4 @@
     </script>
 </body>
 </html>
+
