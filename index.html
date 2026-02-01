@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" href="icon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ReDopa - Dopamine Rebuild System</title>
+    <title>ReDopa</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -32,6 +32,7 @@
             border: 1px solid rgba(255, 255, 255, 0.05); 
         }
 
+        /* 視圖定位：自動避開手機瀏海區域 */
         .view-section { 
             display: none; 
             position: absolute; 
@@ -45,6 +46,7 @@
             display: block; 
         }
 
+        /* 導覽列：安全區域修正 */
         nav {
             padding-top: env(safe-area-inset-top);
             height: calc(64px + env(safe-area-inset-top)) !important;
@@ -55,7 +57,7 @@
             border-bottom: 2px solid #ffffff; 
         }
 
-        /* --- [同步與加載組件] --- */
+        /* --- [加載與登入組件] --- */
         #loading-screen {
             position: fixed;
             inset: 0;
@@ -66,6 +68,7 @@
             align-items: center;
             justify-content: center;
             transition: opacity 0.6s ease-out;
+            pointer-events: auto; /* 確保加載層可被點擊 */
         }
 
         #sync-indicator { 
@@ -94,19 +97,29 @@
             transform: translateY(-20px);
         }
 
-        /* --- [輸入框美化] --- */
+        /* --- [登入輸入框修正] --- */
         .login-input {
             background: transparent;
             border-bottom: 1px solid rgba(255, 255, 255, 0.2);
             text-align: center;
             outline: none;
-            padding: 8px;
+            padding: 10px;
             font-size: 18px;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.15em;
             transition: border-color 0.3s;
+            /* 修正 iOS PWA 無法點擊的問題 */
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            -webkit-appearance: none;
+            border-radius: 0;
         }
+
         .login-input:focus {
             border-color: #ffffff;
+        }
+
+        #login-container {
+            pointer-events: auto !important; /* 強制開放點擊 */
         }
     </style>
 </head>
@@ -117,7 +130,7 @@
     </div>
 
     <div id="loading-screen">
-        <img src="icon.png" alt="ReDopa Icon" class="w-20 h-20 mb-8 animate-pulse rounded-2xl grayscale">
+        <img src="icon.png" alt="ReDopa Icon" class="w-20 h-20 mb-10 animate-pulse rounded-2xl grayscale">
         
         <div id="boot-container" class="w-64">
             <div class="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
@@ -126,10 +139,10 @@
             <p id="boot-text" class="text-[9px] text-neutral-500 mt-4 tracking-[0.3em] uppercase text-center">Initializing...</p>
         </div>
 
-        <div id="login-container" class="hidden flex flex-col items-center gap-6">
-            <p class="text-[10px] text-neutral-500 tracking-[0.4em] uppercase">Identity Required</p>
-            <input type="text" id="user-input-field" class="login-input w-48 text-white" placeholder="USERNAME" autocomplete="off">
-            <button onclick="handleLoginSubmit()" class="mt-4 px-8 py-2 border border-white/20 rounded-full text-xs hover:bg-white hover:text-black transition-all">ENTER SYSTEM</button>
+        <div id="login-container" class="hidden flex flex-col items-center gap-8">
+            <p class="text-[10px] text-neutral-500 tracking-[0.4em] uppercase">Access Required</p>
+            <input type="text" id="user-input-field" class="login-input w-48 text-white" placeholder="USERNAME" autocomplete="off" enterkeyhint="done">
+            <button onclick="handleLoginSubmit()" class="mt-4 px-10 py-3 border border-white/10 rounded-full text-[10px] tracking-widest hover:bg-white hover:text-black transition-all active:scale-95">ENTER SYSTEM</button>
         </div>
     </div>
 
@@ -170,7 +183,7 @@
     <main id="view-history" class="view-section">
         <div class="max-w-2xl mx-auto px-4">
             <h1 class="text-2xl font-bold mb-6">📅 歷史軌跡</h1>
-            <div class="glass-card rounded-2xl p-4 mb-8">
+            <div class="glass-card rounded-2xl p-6 mb-8">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xs text-neutral-500 uppercase tracking-widest text-center">Growth Curve</h2>
                     <div class="flex gap-2">
@@ -179,9 +192,7 @@
                         <button onclick="changeRange('all')" id="btn-all" class="btn-toggle text-[10px] px-3 py-1 rounded-full">ALL</button>
                     </div>
                 </div>
-                <div class="h-[200px]">
-                    <canvas id="growthChart"></canvas>
-                </div>
+                <div class="h-[200px]"><canvas id="growthChart"></canvas></div>
             </div>
             <div class="glass-card rounded-2xl overflow-hidden border border-white/5">
                 <table class="w-full text-left border-collapse">
@@ -218,18 +229,17 @@
                 <ul id="task-manage-list" class="space-y-2 border-t border-white/5 pt-4"></ul>
             </section>
             <section class="glass-card rounded-2xl p-6 border-red-900/20 text-center">
-                <button onclick="resetAll()" class="text-red-500/50 border border-red-900/30 px-4 py-1 rounded text-sm uppercase">Factory Reset</button>
+                <button onclick="resetAll()" class="text-red-500/50 border border-red-900/30 px-4 py-1 rounded text-xs uppercase">Factory Reset</button>
             </section>
         </div>
     </main>
 
     <script>
-        // --- [Supabase 初始化] ---
+        // --- [初始化與全域狀態] ---
         const supabaseUrl = 'https://okesrvqivpqvahmenafx.supabase.co';
         const supabaseKey = 'sb_publishable_QCthF4rOOZH0XUb4KQXUtA_I2LZM1JJ';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- [狀態變數] ---
         let state = {
             categories: JSON.parse(localStorage.getItem('ds_categories')) || ['一般'],
             tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
@@ -239,38 +249,13 @@
         let currentUser = localStorage.getItem('redopa_user');
         let growthChart = null, currentChartRange = 'month', currentFilter = null;
 
-        // --- [並行下拉重整邏輯] ---
-        let startY = 0, pullDiff = 0;
-        const ptrThreshold = 110;
-        window.addEventListener('touchstart', (e) => { if (window.scrollY <= 0) { startY = e.touches[0].pageY; pullDiff = 0; } }, { passive: true });
-        window.addEventListener('touchmove', (e) => {
-            if (window.scrollY > 0) return;
-            const currentY = e.touches[0].pageY;
-            pullDiff = currentY - startY;
-            if (pullDiff > 20) {
-                const move = Math.min(pullDiff * 0.3, 50);
-                gsap.set('#ptr-indicator', { y: move, opacity: pullDiff / ptrThreshold });
-                document.getElementById('ptr-icon').innerText = pullDiff >= ptrThreshold ? "Release to sync" : "Pull to sync";
-            }
-        }, { passive: true });
-        window.addEventListener('touchend', (e) => {
-            if (window.scrollY <= 0 && pullDiff >= ptrThreshold) {
-                gsap.to('#ptr-indicator', { y: 0, opacity: 0, duration: 0.2, onComplete: () => {
-                    const screen = document.getElementById('loading-screen');
-                    screen.style.display = 'flex'; screen.style.opacity = '1';
-                    location.reload();
-                }});
-            } else { gsap.to('#ptr-indicator', { y: -20, opacity: 0, duration: 0.3, ease: "power2.out" }); }
-            pullDiff = 0;
-        });
-
-        // --- [雲端同步] ---
+        // --- [核心同步邏輯] ---
         async function loadStateFromServer() {
             if (!currentUser) return;
             showSync(true);
             try {
                 const { data } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
-                if (data && data.state_json) state = data.state_json;
+                if (data?.state_json) state = data.state_json;
             } catch (err) { console.log("Cloud sync bypassed."); }
             showSync(false);
         }
@@ -284,9 +269,12 @@
             showSync(false);
         }
 
-        function showSync(isVisible) { const el = document.getElementById('sync-indicator'); if(el) el.style.opacity = isVisible ? 1 : 0; }
+        function showSync(isVisible) { 
+            const el = document.getElementById('sync-indicator'); 
+            if(el) el.style.opacity = isVisible ? 1 : 0; 
+        }
 
-        // --- [視圖切換] ---
+        // --- [視圖切換與 UI 渲染] ---
         function switchView(view) {
             const sections = ['view-home', 'view-settings', 'view-history'];
             sections.forEach(s => { 
@@ -305,21 +293,17 @@
             }, 250);
         }
 
-        // --- [數據計算] ---
         function calculateDailyScore(dateStr) { 
             const doneIds = state.completions[dateStr] || []; 
             return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0); 
         }
-        function calculateMonthlyScore(yearMonth) { return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0); }
-        function setFilter(cat) { currentFilter = cat; renderHome(); }
 
-        // --- [UI 渲染] ---
         function renderHome() {
-            const statsContainer = document.getElementById('stats-dashboard');
-            const questContainer = document.getElementById('quest-container');
-            if(!statsContainer || !questContainer) return;
+            const stats = document.getElementById('stats-dashboard');
+            const quest = document.getElementById('quest-container');
+            if(!stats || !quest) return;
             const doneIds = state.completions[today] || [];
-            statsContainer.innerHTML = state.categories.map(cat => {
+            stats.innerHTML = state.categories.map(cat => {
                 const catScore = state.tasks.filter(t => t.category === cat).reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
                 const isActive = currentFilter === cat ? 'border-white bg-white/10' : 'border-white/5';
                 return `<div onclick="setFilter('${cat}')" class="glass-card px-4 py-2 rounded-xl border ${isActive} cursor-pointer transition-all hover:scale-105 min-w-[80px]">
@@ -329,20 +313,37 @@
             }).join('');
             document.getElementById('clear-filter').style.display = currentFilter ? 'block' : 'none';
             const displayCats = currentFilter ? [currentFilter] : state.categories;
-            questContainer.innerHTML = displayCats.map(cat => {
+            quest.innerHTML = displayCats.map(cat => {
                 const catTasks = state.tasks.filter(t => t.category === cat);
-                if (catTasks.length === 0) return '';
+                if (!catTasks.length) return '';
                 return `<div class="mb-6"><h3 class="text-[10px] text-neutral-500 mb-2 uppercase tracking-[0.2em] pl-2 border-l border-white/20">${cat}</h3>
                         <div class="space-y-2">${catTasks.map(t => `
-                            <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer transition-colors">
-                                <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
-                                <span class="flex-1 ${doneIds.includes(t.id) ? 'line-through text-neutral-600' : ''}">${t.name}</span>
+                            <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer hover:bg-neutral-900/40 transition-colors">
+                                <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id)?'checked':''} onchange="toggleTask(${t.id})">
+                                <span class="flex-1 ${doneIds.includes(t.id)?'line-through text-neutral-600':''}">${t.name}</span>
                                 <span class="text-white font-mono text-sm">${t.score}</span>
                             </label>`).join('')}</div></div>`;
             }).join('');
             gsap.to("#total-score", { innerHTML: calculateDailyScore(today), duration: 0.5, snap: { innerHTML: 1 } });
         }
 
+        // --- [管理功能集] ---
+        function toggleTask(id) { if (!state.completions[today]) state.completions[today] = []; const idx = state.completions[today].indexOf(id); if (idx > -1) state.completions[today].splice(idx, 1); else state.completions[today].push(id); saveState(); renderHome(); }
+        function addCategory() { const val = document.getElementById('new-cat-input').value.trim(); if (val && !state.categories.includes(val)) { state.categories.push(val); saveState(); renderSettings(); document.getElementById('new-cat-input').value = ''; } }
+        function addTask() { 
+            const name = document.getElementById('task-name').value.trim(), cat = document.getElementById('task-cat-select').value, score = parseInt(document.getElementById('task-score').value) || 0; 
+            if (name && cat) { state.tasks.push({ id: Date.now(), name, category: cat, score }); saveState(); renderSettings(); document.getElementById('task-name').value = ''; document.getElementById('task-score').value = ''; } 
+        }
+        function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); saveState(); renderSettings(); }
+        function deleteCategory(catName) { if (catName === '一般') return alert("不可刪除預設"); if (confirm(`確定刪除「${catName}」？`)) { state.categories = state.categories.filter(c => c !== catName); state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); saveState(); renderSettings(); } }
+        function resetAll() { if (confirm("確定重置數據？")) { localStorage.clear(); location.reload(); } }
+        function renderSettings() {
+            document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
+            document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `<li class="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg text-sm border border-white/5"><div class="flex items-center gap-2"><span class="text-[10px] text-neutral-500">[${t.category}]</span>${t.name}</div><div class="flex items-center gap-4"><span class="font-bold text-white">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-900">✕</button></div></li>`).join('');
+        }
+        function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; }
+        function changeRange(range) { currentChartRange = range; document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); document.getElementById(`btn-${range}`).classList.add('active'); renderChart(range); }
         function renderChart(range) {
             const canvas = document.getElementById('growthChart');
             if(!canvas) return;
@@ -354,48 +355,18 @@
             if (growthChart) growthChart.destroy();
             growthChart = new Chart(ctx, {
                 type: 'line',
-                data: { labels, datasets: [{ data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range === 'month' ? 0 : 3 }] },
+                data: { labels, datasets: [{ data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range==='month'?0:3 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#525252' } }, x: { grid: { display: false }, ticks: { color: '#525252' } } } }
             });
         }
 
-        // --- [管理功能] ---
-        function toggleTask(id) { 
-            if (!state.completions[today]) state.completions[today] = []; 
-            const idx = state.completions[today].indexOf(id); 
-            if (idx > -1) state.completions[today].splice(idx, 1); 
-            else state.completions[today].push(id); 
-            saveState(); renderHome(); 
-        }
-        function addCategory() { 
-            const val = document.getElementById('new-cat-input').value.trim(); 
-            if (val && !state.categories.includes(val)) { state.categories.push(val); saveState(); renderSettings(); document.getElementById('new-cat-input').value = ''; } 
-        }
-        function addTask() { 
-            const name = document.getElementById('task-name').value.trim(), cat = document.getElementById('task-cat-select').value, score = parseInt(document.getElementById('task-score').value) || 0; 
-            if (name && cat) { state.tasks.push({ id: Date.now(), name, category: cat, score }); saveState(); renderSettings(); document.getElementById('task-name').value = ''; document.getElementById('task-score').value = ''; } 
-        }
-        function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); saveState(); renderSettings(); }
-        function deleteCategory(catName) { if (catName === '一般') return alert("不可刪除預設"); if (confirm(`確定刪除「${catName}」？`)) { state.categories = state.categories.filter(c => c !== catName); state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); saveState(); renderSettings(); } }
-        function resetAll() { if (confirm("這將清除所有資料，確定重置嗎？")) { localStorage.clear(); location.reload(); } }
-        function renderSettings() {
-            document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
-            document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
-            document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `<li class="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg text-sm border border-white/5"><div class="flex items-center gap-2"><span class="text-[10px] text-neutral-500">[${t.category}]</span>${t.name}</div><div class="flex items-center gap-4"><span class="font-bold text-white">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-900">✕</button></div></li>`).join('');
-        }
-        function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; }
-        function changeRange(range) { currentChartRange = range; document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); document.getElementById(`btn-${range}`).classList.add('active'); renderChart(range); }
-
-        // --- [10. 登入處理邏輯] ---
+        // --- [登入與引導修正邏輯] ---
         async function handleLoginSubmit() {
             const input = document.getElementById('user-input-field');
             const username = input.value.trim();
-            
             if (username) {
                 currentUser = username;
                 localStorage.setItem('redopa_user', currentUser);
-                
-                // 隱藏登入介面，顯示進度條並繼續初始化
                 gsap.to('#login-container', { opacity: 0, y: 10, duration: 0.3, onComplete: () => {
                     document.getElementById('login-container').classList.add('hidden');
                     document.getElementById('boot-container').classList.remove('hidden');
@@ -404,23 +375,35 @@
             }
         }
 
-        // 監聽 Enter 鍵
+        // 監聽 Enter 鍵並強制收起鍵盤
         document.getElementById('user-input-field').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleLoginSubmit();
+            if (e.key === 'Enter') {
+                e.target.blur(); // 強制失去焦點，收起鍵盤
+                handleLoginSubmit();
+            }
         });
 
-        // --- [11. 系統啟動引導流程] ---
         async function bootstrap() {
             const bar = document.getElementById('loading-bar');
-            
-            // 階段一：啟動動畫
-            gsap.to(bar, { width: '0%', duration: 0.8, ease: "power2.out" });
+            gsap.to(bar, { width: '20%', duration: 0.8, ease: "power2.out" });
 
             if (!currentUser) {
-                // 如果沒有使用者，隱藏進度條，顯示登入表單
+                // 顯示登入容器
                 document.getElementById('boot-container').classList.add('hidden');
-                document.getElementById('login-container').classList.remove('hidden');
-                gsap.fromTo('#login-container', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6 });
+                const loginBox = document.getElementById('login-container');
+                loginBox.classList.remove('hidden');
+                
+                gsap.fromTo(loginBox, { opacity: 0, y: 20 }, { 
+                    opacity: 1, y: 0, duration: 0.6,
+                    onComplete: () => {
+                        // 修正：在動畫完成後 300ms 再對焦，增加 iOS 喚起成功率
+                        setTimeout(() => {
+                            const input = document.getElementById('user-input-field');
+                            input.focus();
+                            input.click(); // 模擬點擊以滿足 iOS 鍵盤彈出限制
+                        }, 300);
+                    }
+                });
             } else {
                 continueBootstrap();
             }
@@ -428,19 +411,10 @@
 
         async function continueBootstrap() {
             const bar = document.getElementById('loading-bar');
-            const bootText = document.getElementById('boot-text');
-
-            bootText.innerText = "Synchronizing Neural Data...";
-            gsap.to(bar, { width: '60%', duration: 0.5, ease: "power2.out" });
-
-            // 從 Supabase 下載
+            gsap.to(bar, { width: '60%', duration: 0.5 });
             await loadStateFromServer();
-
-            // 完成
             gsap.to(bar, { 
-                width: '100%', 
-                duration: 0.4, 
-                ease: "power2.inOut",
+                width: '100%', duration: 0.4, 
                 onComplete: () => {
                     setTimeout(() => {
                         const screen = document.getElementById('loading-screen');
@@ -457,5 +431,3 @@
     </script>
 </body>
 </html>
-
-
