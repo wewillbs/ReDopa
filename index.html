@@ -414,7 +414,7 @@
             const bar = document.getElementById('loading-bar');
             
             // 階段一：啟動動畫
-            gsap.to(bar, { width: '20%', duration: 0.8, ease: "power2.out" });
+            gsap.to(bar, { width: '0%', duration: 0.8, ease: "power2.out" });
 
             if (!currentUser) {
                 // 如果沒有使用者，隱藏進度條，顯示登入表單
@@ -457,3 +457,4 @@
     </script>
 </body>
 </html>
+
