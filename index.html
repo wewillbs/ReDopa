@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="icon.png">
     <meta name="mobile-web-app-capable" content="yes">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>ReDopa - Dopamine Rebuild System</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
-        body { background-color: #0a0a0a; color: #f5f5f5; font-family: sans-serif; overflow-x: hidden; }
+        body { background-color: #0a0a0a; color: #f5f5f5; font-family: sans-serif; overflow-x: hidden; touch-action: pan-y; }
         .glass-card { background: rgba(23, 23, 23, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); }
         .view-section { display: none; position: absolute; width: 100%; top: 80px; }
         .active-view { display: block; }
@@ -37,9 +37,28 @@
             justify-content: center;
             transition: opacity 0.6s ease-out;
         }
+
+        /* 下拉重新整理指示器 */
+        #ptr-indicator {
+            position: fixed;
+            top: -50px;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 60;
+        }
+        #ptr-icon { font-size: 12px; color: #737373; tracking: 0.2em; text-transform: uppercase; }
     </style>
 </head>
 <body class="p-4 md:p-8">
+
+    <div id="ptr-indicator">
+        <span id="ptr-icon">Pull to sync</span>
+    </div>
 
     <div id="loading-screen">
         <img src="icon.png" alt="ReDopa Icon" class="w-24 h-24 mb-6 animate-pulse rounded-2xl grayscale">
@@ -133,31 +152,57 @@
     </main>
 
     <script>
-        // --- [1. 初始化 Supabase] ---
+        // --- [Supabase 初始化] ---
         const supabaseUrl = 'https://okesrvqivpqvahmenafx.supabase.co';
         const supabaseKey = 'sb_publishable_QCthF4rOOZH0XUb4KQXUtA_I2LZM1JJ';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- [2. 狀態管理] ---
+        // --- [狀態管理] ---
         let state = {
             categories: JSON.parse(localStorage.getItem('ds_categories')) || ['一般'],
             tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
             completions: JSON.parse(localStorage.getItem('ds_completions')) || {}
         };
-
         const today = new Date().toISOString().split('T')[0];
         let currentUser = localStorage.getItem('redopa_user');
-        let growthChart = null;
-        let currentChartRange = 'month';
-        let currentFilter = null;
+        let growthChart = null, currentChartRange = 'month', currentFilter = null;
 
-        // --- [3. 雲端同步] ---
+        // --- [核心：下拉重新整理邏輯] ---
+        let touchStartY = 0;
+        const ptrThreshold = 100; // 下拉門檻
+
+        window.addEventListener('touchstart', e => {
+            if (window.scrollY === 0) touchStartY = e.touches[0].pageY;
+        }, { passive: true });
+
+        window.addEventListener('touchmove', e => {
+            if (window.scrollY === 0 && e.touches[0].pageY > touchStartY) {
+                const pullDist = e.touches[0].pageY - touchStartY;
+                const cappedDist = Math.min(pullDist * 0.4, 80); // 橡皮筋阻力效果
+                gsap.set('#ptr-indicator', { y: cappedDist });
+                gsap.set('#ptr-icon', { 
+                    opacity: cappedDist / 40, 
+                    innerText: cappedDist >= 40 ? "Release to sync" : "Pull to sync" 
+                });
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchend', e => {
+            const pullDist = e.changedTouches[0].pageY - touchStartY;
+            if (window.scrollY === 0 && pullDist > ptrThreshold) {
+                location.reload(); // 觸發重整
+            } else {
+                gsap.to('#ptr-indicator', { y: 0, duration: 0.3, ease: "power2.out" });
+            }
+        });
+
+        // --- [同步與邏輯函數] ---
         async function loadStateFromServer() {
             if (!currentUser) return;
             showSync(true);
             try {
-                const { data, error } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
-                if (data && data.state_json) state = data.state_json;
+                const { data } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
+                if (data?.state_json) state = data.state_json;
             } catch (err) { console.log("Cloud sync bypassed."); }
             showSync(false);
         }
@@ -176,7 +221,7 @@
             if(el) el.style.opacity = isVisible ? 1 : 0;
         }
 
-        // --- [4. 視圖與計算邏輯] ---
+        // --- [UI 渲染函數] ---
         function switchView(view) {
             const sections = ['view-home', 'view-settings', 'view-history'];
             sections.forEach(s => { const el = document.getElementById(s); if (el && el.style.display !== 'none') gsap.to(el, { opacity: 0, y: 10, duration: 0.2, onComplete: () => el.style.display = 'none' }); });
@@ -184,8 +229,7 @@
                 const target = document.getElementById(`view-${view}`);
                 if(target) { target.style.display = 'block'; gsap.fromTo(target, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 }); }
                 document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
-                const navBtn = document.getElementById(`nav-${view}`);
-                if(navBtn) navBtn.classList.add('active');
+                document.getElementById(`nav-${view}`).classList.add('active');
                 if (view === 'home') renderHome();
                 if (view === 'settings') renderSettings();
                 if (view === 'history') { renderHistory(); renderChart(currentChartRange); }
@@ -225,20 +269,19 @@
                                 <span class="text-white font-mono text-sm">${t.score}</span>
                             </label>`).join('')}</div></div>`;
             }).join('');
-            const scoreToday = calculateDailyScore(today);
-            gsap.to("#total-score", { innerHTML: scoreToday, duration: 0.5, snap: { innerHTML: 1 } });
+            gsap.to("#total-score", { innerHTML: calculateDailyScore(today), duration: 0.5, snap: { innerHTML: 1 } });
         }
 
         function renderChart(range) {
             const ctx = document.getElementById('growthChart').getContext('2d');
-            let labels = []; let scores = [];
+            let labels = [], scores = [];
             if (range === 'month') { for (let i = 29; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const ds = d.toISOString().split('T')[0]; labels.push(ds.slice(5)); scores.push(calculateDailyScore(ds)); } }
-            else if (range === 'year') { for (let i = 11; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); const ym = d.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); } }
-            else if (range === 'all') { const dates = Object.keys(state.completions).sort(); if(dates.length) { let curr = new Date(dates[0].slice(0, 7)); while(curr <= new Date()) { const ym = curr.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); curr.setMonth(curr.setMonth() + 1); } } }
+            else if (range === 'year') { for (let i = 11; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); labels.push(d.toISOString().slice(0, 7)); scores.push(calculateMonthlyScore(d.toISOString().slice(0, 7))); } }
+            else if (range === 'all') { const dates = Object.keys(state.completions).sort(); if(dates.length) { let curr = new Date(dates[0].slice(0, 7)); while(curr <= new Date()) { labels.push(curr.toISOString().slice(0, 7)); scores.push(calculateMonthlyScore(curr.toISOString().slice(0, 7))); curr.setMonth(curr.setMonth() + 1); } } }
             if (growthChart) growthChart.destroy();
             growthChart = new Chart(ctx, {
                 type: 'line',
-                data: { labels, datasets: [{ label: 'Pts', data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range==='month'?0:3, pointBackgroundColor: '#ffffff' }] },
+                data: { labels, datasets: [{ data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range==='month'?0:3 }] },
                 options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#525252' } }, x: { grid: { display: false }, ticks: { color: '#525252' } } } }
             });
         }
@@ -246,18 +289,18 @@
         function toggleTask(id) { if (!state.completions[today]) state.completions[today] = []; const idx = state.completions[today].indexOf(id); if (idx > -1) state.completions[today].splice(idx, 1); else state.completions[today].push(id); saveState(); renderHome(); }
         function addCategory() { const val = document.getElementById('new-cat-input').value.trim(); if (val && !state.categories.includes(val)) { state.categories.push(val); saveState(); renderSettings(); document.getElementById('new-cat-input').value = ''; } }
         function deleteCategory(catName) { if (catName === '一般') return alert("不可刪除預設分類"); if (confirm(`確定刪除「${catName}」？`)) { state.categories = state.categories.filter(c => c !== catName); state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); saveState(); renderSettings(); } }
-        function addTask() { const name = document.getElementById('task-name').value.trim(); const cat = document.getElementById('task-cat-select').value; const score = parseInt(document.getElementById('task-score').value) || 0; if (name && cat) { state.tasks.push({ id: Date.now(), name, category: cat, score }); saveState(); renderSettings(); document.getElementById('task-name').value = ''; document.getElementById('task-score').value = ''; } }
+        function addTask() { const name = document.getElementById('task-name').value.trim(), cat = document.getElementById('task-cat-select').value, score = parseInt(document.getElementById('task-score').value) || 0; if (name && cat) { state.tasks.push({ id: Date.now(), name, category: cat, score }); saveState(); renderSettings(); document.getElementById('task-name').value = ''; document.getElementById('task-score').value = ''; } }
         function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); saveState(); renderSettings(); }
-        function resetAll() { if (confirm("確定重置？")) { localStorage.clear(); location.reload(); } }
+        function resetAll() { if (confirm("重置數據？")) { localStorage.clear(); location.reload(); } }
         function renderSettings() {
             document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
             document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
             document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `<li class="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg text-sm border border-white/5"><div class="flex items-center gap-2"><span class="text-[10px] text-neutral-500">[${t.category}]</span>${t.name}</div><div class="flex items-center gap-4"><span class="font-bold text-white">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-900">✕</button></div></li>`).join('');
         }
-        function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No historical records found.</td></tr>'; }
+        function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; }
         function changeRange(range) { currentChartRange = range; document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); document.getElementById(`btn-${range}`).classList.add('active'); renderChart(range); }
 
-        // --- [9. 啟動腳本] ---
+        // --- [系統啟動] ---
         async function bootstrap() {
             const bar = document.getElementById('loading-bar');
             setTimeout(() => { if(bar) bar.style.width = '30%'; }, 100);
@@ -265,7 +308,10 @@
             if(bar) bar.style.width = '60%';
             await loadStateFromServer();
             if(bar) bar.style.width = '100%';
-            setTimeout(() => { const screen = document.getElementById('loading-screen'); if(screen) { screen.style.opacity = '0'; setTimeout(() => { screen.style.display = 'none'; renderHome(); }, 600); } }, 300);
+            setTimeout(() => { 
+                const screen = document.getElementById('loading-screen');
+                if(screen) { screen.style.opacity = '0'; setTimeout(() => { screen.style.display = 'none'; renderHome(); }, 600); }
+            }, 300);
         }
         bootstrap();
     </script>
