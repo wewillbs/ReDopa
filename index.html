@@ -18,32 +18,32 @@
 
     <style>
         /* --- [基礎與滾動設定] --- */
-        body { 
-            background-color: #0a0a0a; 
-            color: #f5f5f5; 
-            font-family: sans-serif; 
-            overflow-x: hidden; 
-            overscroll-behavior-y: auto; 
+        body {
+            background-color: #0a0a0a;
+            color: #f5f5f5;
+            font-family: sans-serif;
+            overflow-x: hidden;
+            overscroll-behavior-y: auto;
         }
 
-        .glass-card { 
-            background: rgba(23, 23, 23, 0.7); 
-            backdrop-filter: blur(10px); 
-            border: 1px solid rgba(255, 255, 255, 0.05); 
+        .glass-card {
+            background: rgba(23, 23, 23, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         /* 視圖定位：避開手機瀏海 Safe Area */
-        .view-section { 
-            display: none; 
-            position: absolute; 
-            width: 100%; 
+        .view-section {
+            display: none;
+            position: absolute;
+            width: 100%;
             left: 0;
-            top: calc(80px + env(safe-area-inset-top)); 
+            top: calc(80px + env(safe-area-inset-top));
             padding-bottom: 120px;
         }
 
-        .active-view { 
-            display: block; 
+        .active-view {
+            display: block;
         }
 
         /* 導覽列安全區域修正 */
@@ -52,9 +52,9 @@
             height: calc(64px + env(safe-area-inset-top)) !important;
         }
 
-        .nav-link.active { 
-            color: #ffffff; 
-            border-bottom: 2px solid #ffffff; 
+        .nav-link.active {
+            color: #ffffff;
+            border-bottom: 2px solid #ffffff;
         }
 
         /* --- [同步與加載組件] --- */
@@ -71,20 +71,20 @@
             pointer-events: auto; /* 確保加載層可被點擊 */
         }
 
-        #sync-indicator { 
-            position: fixed; 
-            bottom: calc(20px + env(safe-area-inset-bottom)); 
-            right: 20px; 
-            font-size: 10px; 
-            color: #ffffff; 
-            opacity: 0; 
-            transition: opacity 0.3s; 
-            z-index: 100; 
+        #sync-indicator {
+            position: fixed;
+            bottom: calc(20px + env(safe-area-inset-bottom));
+            right: 20px;
+            font-size: 10px;
+            color: #ffffff;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 100;
         }
 
         #ptr-indicator {
             position: fixed;
-            top: calc(64px + env(safe-area-inset-top)); 
+            top: calc(64px + env(safe-area-inset-top));
             left: 0;
             width: 100%;
             height: 40px;
@@ -107,12 +107,24 @@
             font-size: 18px;
             letter-spacing: 0.15em;
             transition: border-color 0.3s;
-            /* 修正 iOS PWA 無法選取與點擊的問題 */
+            
+            /* === 關鍵修正開始 === */
+            /* 1. 確保 iOS 允許文字選取 */
             -webkit-user-select: text !important;
             user-select: text !important;
+            
+            /* 2. 禁止 iOS 雙擊縮放，並優化點擊判定 */
+            touch-action: manipulation;
+            
+            /* 3. 修復 iOS PWA 渲染層級問題 (避免輸入框被當作背景) */
+            transform: translate3d(0, 0, 0); 
+            
+            /* 4. 強制外觀重置 */
             -webkit-appearance: none;
             border-radius: 0;
             pointer-events: auto !important;
+            z-index: 10001; /* 確保層級高於遮罩 */
+            /* === 關鍵修正結束 === */
         }
 
         .login-input:focus {
@@ -198,7 +210,11 @@
             <div class="glass-card rounded-2xl overflow-hidden border border-white/5">
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-neutral-900 text-neutral-400 text-xs uppercase tracking-wider">
-                        <tr><th class="p-4">日期</th><th class="p-4 text-center">得分</th><th class="p-4">完成度</th></tr>
+                        <tr>
+                            <th class="p-4">日期</th>
+                            <th class="p-4 text-center">得分</th>
+                            <th class="p-4">完成度</th>
+                        </tr>
                     </thead>
                     <tbody id="history-table-body" class="text-sm"></tbody>
                 </table>
@@ -248,17 +264,25 @@
         };
         const today = new Date().toISOString().split('T')[0];
         let currentUser = localStorage.getItem('redopa_user');
-        let growthChart = null, currentChartRange = 'month', currentFilter = null;
+        let growthChart = null,
+            currentChartRange = 'month',
+            currentFilter = null;
 
         // --- [並行下拉重新整理核心邏輯：修正 RWD 偏移] ---
-        let startY = 0, pullDiff = 0;
+        let startY = 0,
+            pullDiff = 0;
         const ptrThreshold = 110;
 
-        window.addEventListener('touchstart', (e) => { 
-            if (window.scrollY <= 0) { 
-                startY = e.touches[0].pageY; 
-                pullDiff = 0; 
-            } 
+        window.addEventListener('touchstart', (e) => {
+            // 修正：如果是點擊輸入框或登入容器，完全忽略下拉偵測
+            if (e.target.closest('#login-container') || e.target.tagName === 'INPUT') {
+                return;
+            }
+
+            if (window.scrollY <= 0) {
+                startY = e.touches[0].pageY;
+                pullDiff = 0;
+            }
         }, { passive: true });
 
         window.addEventListener('touchmove', (e) => {
@@ -269,21 +293,36 @@
             if (pullDiff > 10) {
                 // 指示器動畫修正：同步考慮 Safe Area 偏移
                 const move = Math.min(pullDiff * 0.3, 50);
-                gsap.set('#ptr-indicator', { y: move, opacity: pullDiff / ptrThreshold });
+                gsap.set('#ptr-indicator', {
+                    y: move,
+                    opacity: pullDiff / ptrThreshold
+                });
                 document.getElementById('ptr-icon').innerText = pullDiff >= ptrThreshold ? "Release to sync" : "Pull to sync";
             }
-        }, { passive: true });
+        }, {
+            passive: true
+        });
 
         window.addEventListener('touchend', (e) => {
             if (window.scrollY <= 0 && pullDiff >= ptrThreshold) {
-                gsap.to('#ptr-indicator', { y: 0, opacity: 0, duration: 0.2, onComplete: () => {
-                    const screen = document.getElementById('loading-screen');
-                    screen.style.display = 'flex'; 
-                    screen.style.opacity = '1';
-                    location.reload();
-                }});
-            } else { 
-                gsap.to('#ptr-indicator', { y: -20, opacity: 0, duration: 0.3, ease: "power2.out" }); 
+                gsap.to('#ptr-indicator', {
+                    y: 0,
+                    opacity: 0,
+                    duration: 0.2,
+                    onComplete: () => {
+                        const screen = document.getElementById('loading-screen');
+                        screen.style.display = 'flex';
+                        screen.style.opacity = '1';
+                        location.reload();
+                    }
+                });
+            } else {
+                gsap.to('#ptr-indicator', {
+                    y: -20,
+                    opacity: 0,
+                    duration: 0.3,
+                    ease: "power2.out"
+                });
             }
             pullDiff = 0;
         });
@@ -293,9 +332,13 @@
             if (!currentUser) return;
             showSync(true);
             try {
-                const { data } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
+                const {
+                    data
+                } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
                 if (data?.state_json) state = data.state_json;
-            } catch (err) { console.log("Cloud sync bypassed."); }
+            } catch (err) {
+                console.log("Cloud sync bypassed.");
+            }
             showSync(false);
         }
 
@@ -304,47 +347,78 @@
             localStorage.setItem('ds_categories', JSON.stringify(state.categories));
             localStorage.setItem('ds_tasks', JSON.stringify(state.tasks));
             localStorage.setItem('ds_completions', JSON.stringify(state.completions));
-            if (currentUser) await supabaseClient.from('redopa_data').upsert({ username: currentUser, state_json: state }, { onConflict: 'username' });
+            if (currentUser) await supabaseClient.from('redopa_data').upsert({
+                username: currentUser,
+                state_json: state
+            }, {
+                onConflict: 'username'
+            });
             showSync(false);
         }
 
-        function showSync(isVisible) { 
-            const el = document.getElementById('sync-indicator'); 
-            if(el) el.style.opacity = isVisible ? 1 : 0; 
+        function showSync(isVisible) {
+            const el = document.getElementById('sync-indicator');
+            if (el) el.style.opacity = isVisible ? 1 : 0;
         }
 
         // --- [系統視圖切換] ---
         function switchView(view) {
             const sections = ['view-home', 'view-settings', 'view-history'];
-            sections.forEach(s => { 
-                const el = document.getElementById(s); 
-                if (el && el.style.display !== 'none') gsap.to(el, { opacity: 0, y: 10, duration: 0.2, onComplete: () => el.style.display = 'none' }); 
+            sections.forEach(s => {
+                const el = document.getElementById(s);
+                if (el && el.style.display !== 'none') gsap.to(el, {
+                    opacity: 0,
+                    y: 10,
+                    duration: 0.2,
+                    onComplete: () => el.style.display = 'none'
+                });
             });
             setTimeout(() => {
                 const target = document.getElementById(`view-${view}`);
-                if(target) { target.style.display = 'block'; gsap.fromTo(target, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 }); }
+                if (target) {
+                    target.style.display = 'block';
+                    gsap.fromTo(target, {
+                        opacity: 0,
+                        y: -10
+                    }, {
+                        opacity: 1,
+                        y: 0,
+                        duration: 0.3
+                    });
+                }
                 document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
                 const navBtn = document.getElementById(`nav-${view}`);
-                if(navBtn) navBtn.classList.add('active');
+                if (navBtn) navBtn.classList.add('active');
                 if (view === 'home') renderHome();
                 if (view === 'settings') renderSettings();
-                if (view === 'history') { renderHistory(); renderChart(currentChartRange); }
+                if (view === 'history') {
+                    renderHistory();
+                    renderChart(currentChartRange);
+                }
             }, 250);
         }
 
         // --- [渲染邏輯] ---
-        function calculateDailyScore(dateStr) { 
-            const doneIds = state.completions[dateStr] || []; 
-            return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0); 
+        function calculateDailyScore(dateStr) {
+            const doneIds = state.completions[dateStr] || [];
+            return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
         }
-        function calculateMonthlyScore(yearMonth) { return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0); }
-        function setFilter(cat) { currentFilter = cat; renderHome(); }
+
+        function calculateMonthlyScore(yearMonth) {
+            return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0);
+        }
+
+        function setFilter(cat) {
+            currentFilter = cat;
+            renderHome();
+        }
 
         function renderHome() {
             const stats = document.getElementById('stats-dashboard');
             const quest = document.getElementById('quest-container');
-            if(!stats || !quest) return;
+            if (!stats || !quest) return;
             const doneIds = state.completions[today] || [];
+            
             stats.innerHTML = state.categories.map(cat => {
                 const catScore = state.tasks.filter(t => t.category === cat).reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
                 const isActive = currentFilter === cat ? 'border-white bg-white/10' : 'border-white/5';
@@ -353,8 +427,10 @@
                             <div class="text-xl font-bold text-white text-center">${catScore}</div>
                         </div>`;
             }).join('');
+            
             document.getElementById('clear-filter').style.display = currentFilter ? 'block' : 'none';
             const displayCats = currentFilter ? [currentFilter] : state.categories;
+            
             quest.innerHTML = displayCats.map(cat => {
                 const catTasks = state.tasks.filter(t => t.category === cat);
                 if (catTasks.length === 0) return '';
@@ -366,39 +442,176 @@
                                 <span class="text-white font-mono text-sm">${t.score}</span>
                             </label>`).join('')}</div></div>`;
             }).join('');
-            gsap.to("#total-score", { innerHTML: calculateDailyScore(today), duration: 0.5, snap: { innerHTML: 1 } });
+            
+            gsap.to("#total-score", {
+                innerHTML: calculateDailyScore(today),
+                duration: 0.5,
+                snap: {
+                    innerHTML: 1
+                }
+            });
         }
 
         // --- [管理功能集] ---
-        function toggleTask(id) { if (!state.completions[today]) state.completions[today] = []; const idx = state.completions[today].indexOf(id); if (idx > -1) state.completions[today].splice(idx, 1); else state.completions[today].push(id); saveState(); renderHome(); }
-        function addCategory() { const val = document.getElementById('new-cat-input').value.trim(); if (val && !state.categories.includes(val)) { state.categories.push(val); saveState(); renderSettings(); document.getElementById('new-cat-input').value = ''; } }
-        function addTask() { 
-            const name = document.getElementById('task-name').value.trim(), cat = document.getElementById('task-cat-select').value, score = parseInt(document.getElementById('task-score').value) || 0; 
-            if (name && cat) { state.tasks.push({ id: Date.now(), name, category: cat, score }); saveState(); renderSettings(); document.getElementById('task-name').value = ''; document.getElementById('task-score').value = ''; } 
+        function toggleTask(id) {
+            if (!state.completions[today]) state.completions[today] = [];
+            const idx = state.completions[today].indexOf(id);
+            if (idx > -1) state.completions[today].splice(idx, 1);
+            else state.completions[today].push(id);
+            saveState();
+            renderHome();
         }
-        function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); saveState(); renderSettings(); }
-        function deleteCategory(catName) { if (catName === '一般') return alert("不可刪除預設"); if (confirm(`確定刪除「${catName}」？`)) { state.categories = state.categories.filter(c => c !== catName); state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); saveState(); renderSettings(); } }
-        function resetAll() { if (confirm("確定重置數據？")) { localStorage.clear(); location.reload(); } }
+
+        function addCategory() {
+            const val = document.getElementById('new-cat-input').value.trim();
+            if (val && !state.categories.includes(val)) {
+                state.categories.push(val);
+                saveState();
+                renderSettings();
+                document.getElementById('new-cat-input').value = '';
+            }
+        }
+
+        function addTask() {
+            const name = document.getElementById('task-name').value.trim(),
+                cat = document.getElementById('task-cat-select').value,
+                score = parseInt(document.getElementById('task-score').value) || 0;
+            if (name && cat) {
+                state.tasks.push({
+                    id: Date.now(),
+                    name,
+                    category: cat,
+                    score
+                });
+                saveState();
+                renderSettings();
+                document.getElementById('task-name').value = '';
+                document.getElementById('task-score').value = '';
+            }
+        }
+
+        function deleteTask(id) {
+            state.tasks = state.tasks.filter(t => t.id !== id);
+            saveState();
+            renderSettings();
+        }
+
+        function deleteCategory(catName) {
+            if (catName === '一般') return alert("不可刪除預設");
+            if (confirm(`確定刪除「${catName}」？`)) {
+                state.categories = state.categories.filter(c => c !== catName);
+                state.tasks = state.tasks.map(t => t.category === catName ? { ...t,
+                    category: '一般'
+                } : t);
+                saveState();
+                renderSettings();
+            }
+        }
+
+        function resetAll() {
+            if (confirm("確定重置數據？")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
         function renderSettings() {
             document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
             document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
             document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `<li class="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg text-sm border border-white/5"><div class="flex items-center gap-2"><span class="text-[10px] text-neutral-500">[${t.category}]</span>${t.name}</div><div class="flex items-center gap-4"><span class="font-bold text-white">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-900">✕</button></div></li>`).join('');
         }
-        function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; }
-        function changeRange(range) { currentChartRange = range; document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); document.getElementById(`btn-${range}`).classList.add('active'); renderChart(range); }
+
+        function renderHistory() {
+            const dates = Object.keys(state.completions).sort().reverse();
+            document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>';
+        }
+
+        function changeRange(range) {
+            currentChartRange = range;
+            document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${range}`).classList.add('active');
+            renderChart(range);
+        }
+
         function renderChart(range) {
             const canvas = document.getElementById('growthChart');
-            if(!canvas) return;
+            if (!canvas) return;
             const ctx = canvas.getContext('2d');
-            let labels = [], scores = [];
-            if (range === 'month') { for (let i = 29; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const ds = d.toISOString().split('T')[0]; labels.push(ds.slice(5)); scores.push(calculateDailyScore(ds)); } }
-            else if (range === 'year') { for (let i = 11; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); const ym = d.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); } }
-            else if (range === 'all') { const dates = Object.keys(state.completions).sort(); if(dates.length) { let curr = new Date(dates[0].slice(0, 7)); while(curr <= new Date()) { const ym = curr.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); curr.setMonth(curr.setMonth() + 1); } } }
+            let labels = [],
+                scores = [];
+            
+            if (range === 'month') {
+                for (let i = 29; i >= 0; i--) {
+                    const d = new Date();
+                    d.setDate(d.getDate() - i);
+                    const ds = d.toISOString().split('T')[0];
+                    labels.push(ds.slice(5));
+                    scores.push(calculateDailyScore(ds));
+                }
+            } else if (range === 'year') {
+                for (let i = 11; i >= 0; i--) {
+                    const d = new Date();
+                    d.setMonth(d.getMonth() - i);
+                    const ym = d.toISOString().slice(0, 7);
+                    labels.push(ym);
+                    scores.push(calculateMonthlyScore(ym));
+                }
+            } else if (range === 'all') {
+                const dates = Object.keys(state.completions).sort();
+                if (dates.length) {
+                    let curr = new Date(dates[0].slice(0, 7));
+                    while (curr <= new Date()) {
+                        const ym = curr.toISOString().slice(0, 7);
+                        labels.push(ym);
+                        scores.push(calculateMonthlyScore(ym));
+                        curr.setMonth(curr.setMonth() + 1);
+                    }
+                }
+            }
+            
             if (growthChart) growthChart.destroy();
             growthChart = new Chart(ctx, {
                 type: 'line',
-                data: { labels, datasets: [{ data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range==='month'?0:3 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#525252' } }, x: { grid: { display: false }, ticks: { color: '#525252' } } } }
+                data: {
+                    labels,
+                    datasets: [{
+                        data: scores,
+                        borderColor: '#ffffff',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        borderWidth: 1.5,
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: range === 'month' ? 0 : 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.03)'
+                            },
+                            ticks: {
+                                color: '#525252'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#525252'
+                            }
+                        }
+                    }
+                }
             });
         }
 
@@ -409,11 +622,16 @@
             if (username) {
                 currentUser = username;
                 localStorage.setItem('redopa_user', currentUser);
-                gsap.to('#login-container', { opacity: 0, y: 10, duration: 0.3, onComplete: () => {
-                    document.getElementById('login-container').classList.add('hidden');
-                    document.getElementById('boot-container').classList.remove('hidden');
-                    continueBootstrap();
-                }});
+                gsap.to('#login-container', {
+                    opacity: 0,
+                    y: 10,
+                    duration: 0.3,
+                    onComplete: () => {
+                        document.getElementById('login-container').classList.add('hidden');
+                        document.getElementById('boot-container').classList.remove('hidden');
+                        continueBootstrap();
+                    }
+                });
             }
         }
 
@@ -426,22 +644,31 @@
 
         async function bootstrap() {
             const bar = document.getElementById('loading-bar');
-            gsap.to(bar, { width: '0%', duration: 0.8, ease: "power2.out" });
+            gsap.to(bar, {
+                width: '0%',
+                duration: 0.8,
+                ease: "power2.out"
+            });
 
             if (!currentUser) {
                 document.getElementById('boot-container').classList.add('hidden');
                 const loginBox = document.getElementById('login-container');
                 loginBox.classList.remove('hidden');
-                
-                gsap.fromTo(loginBox, { opacity: 0, y: 20 }, { 
-                    opacity: 1, y: 0, duration: 0.6,
+
+                gsap.fromTo(loginBox, {
+                    opacity: 0,
+                    y: 20
+                }, {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.6,
                     onComplete: () => {
                         // 針對 iOS PWA 的對焦修正：延遲 300ms 並模擬點擊
-                        setTimeout(() => {
+                        /*setTimeout(() => {
                             const input = document.getElementById('user-input-field');
                             input.focus();
-                            input.click(); 
-                        }, 300);
+                            input.click();
+                        }, 300);*/
                     }
                 });
             } else {
@@ -451,16 +678,23 @@
 
         async function continueBootstrap() {
             const bar = document.getElementById('loading-bar');
-            gsap.to(bar, { width: '60%', duration: 0.5 });
+            gsap.to(bar, {
+                width: '60%',
+                duration: 0.5
+            });
             await loadStateFromServer();
-            gsap.to(bar, { 
-                width: '100%', duration: 0.4, 
+            gsap.to(bar, {
+                width: '100%',
+                duration: 0.4,
                 onComplete: () => {
                     setTimeout(() => {
                         const screen = document.getElementById('loading-screen');
-                        if(screen) {
+                        if (screen) {
                             screen.style.opacity = '0';
-                            setTimeout(() => { screen.style.display = 'none'; renderHome(); }, 600);
+                            setTimeout(() => {
+                                screen.style.display = 'none';
+                                renderHome();
+                            }, 600);
                         }
                     }, 0);
                 }
