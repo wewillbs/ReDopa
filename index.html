@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
-        /* --- [基礎樣式] --- */
+        /* --- [基礎與滾動設定] --- */
         body { 
             background-color: #0a0a0a; 
             color: #f5f5f5; 
@@ -32,7 +32,7 @@
             border: 1px solid rgba(255, 255, 255, 0.05); 
         }
 
-        /* 視圖定位：自動避開手機瀏海區域 */
+        /* 視圖定位：避開手機瀏海 Safe Area */
         .view-section { 
             display: none; 
             position: absolute; 
@@ -46,7 +46,7 @@
             display: block; 
         }
 
-        /* 導覽列：安全區域修正 */
+        /* 導覽列安全區域修正 */
         nav {
             padding-top: env(safe-area-inset-top);
             height: calc(64px + env(safe-area-inset-top)) !important;
@@ -57,7 +57,7 @@
             border-bottom: 2px solid #ffffff; 
         }
 
-        /* --- [加載與登入組件] --- */
+        /* --- [同步與加載組件] --- */
         #loading-screen {
             position: fixed;
             inset: 0;
@@ -97,7 +97,7 @@
             transform: translateY(-20px);
         }
 
-        /* --- [登入輸入框修正] --- */
+        /* --- [登入輸入框：修正 PWA 輸入限制] --- */
         .login-input {
             background: transparent;
             border-bottom: 1px solid rgba(255, 255, 255, 0.2);
@@ -107,11 +107,12 @@
             font-size: 18px;
             letter-spacing: 0.15em;
             transition: border-color 0.3s;
-            /* 修正 iOS PWA 無法點擊的問題 */
+            /* 修正 iOS PWA 無法選取與點擊的問題 */
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-appearance: none;
             border-radius: 0;
+            pointer-events: auto !important;
         }
 
         .login-input:focus {
@@ -119,7 +120,7 @@
         }
 
         #login-container {
-            pointer-events: auto !important; /* 強制開放點擊 */
+            pointer-events: auto !important; /* 強制開放點擊穿透 */
         }
     </style>
 </head>
@@ -140,7 +141,7 @@
         </div>
 
         <div id="login-container" class="hidden flex flex-col items-center gap-8">
-            <p class="text-[10px] text-neutral-500 tracking-[0.4em] uppercase">Access Required</p>
+            <p class="text-[10px] text-neutral-500 tracking-[0.4em] uppercase">Identity Required</p>
             <input type="text" id="user-input-field" class="login-input w-48 text-white" placeholder="USERNAME" autocomplete="off" enterkeyhint="done">
             <button onclick="handleLoginSubmit()" class="mt-4 px-10 py-3 border border-white/10 rounded-full text-[10px] tracking-widest hover:bg-white hover:text-black transition-all active:scale-95">ENTER SYSTEM</button>
         </div>
@@ -183,7 +184,7 @@
     <main id="view-history" class="view-section">
         <div class="max-w-2xl mx-auto px-4">
             <h1 class="text-2xl font-bold mb-6">📅 歷史軌跡</h1>
-            <div class="glass-card rounded-2xl p-6 mb-8">
+            <div class="glass-card rounded-2xl p-4 mb-8">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xs text-neutral-500 uppercase tracking-widest text-center">Growth Curve</h2>
                     <div class="flex gap-2">
@@ -229,13 +230,13 @@
                 <ul id="task-manage-list" class="space-y-2 border-t border-white/5 pt-4"></ul>
             </section>
             <section class="glass-card rounded-2xl p-6 border-red-900/20 text-center">
-                <button onclick="resetAll()" class="text-red-500/50 border border-red-900/30 px-4 py-1 rounded text-xs uppercase">Factory Reset</button>
+                <button onclick="resetAll()" class="text-red-500/50 border border-red-900/10 px-4 py-1 rounded text-xs uppercase tracking-widest">Factory Reset</button>
             </section>
         </div>
     </main>
 
     <script>
-        // --- [初始化與全域狀態] ---
+        // --- [初始化與變數] ---
         const supabaseUrl = 'https://okesrvqivpqvahmenafx.supabase.co';
         const supabaseKey = 'sb_publishable_QCthF4rOOZH0XUb4KQXUtA_I2LZM1JJ';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
@@ -249,7 +250,45 @@
         let currentUser = localStorage.getItem('redopa_user');
         let growthChart = null, currentChartRange = 'month', currentFilter = null;
 
-        // --- [核心同步邏輯] ---
+        // --- [並行下拉重新整理核心邏輯：修正 RWD 偏移] ---
+        let startY = 0, pullDiff = 0;
+        const ptrThreshold = 110;
+
+        window.addEventListener('touchstart', (e) => { 
+            if (window.scrollY <= 0) { 
+                startY = e.touches[0].pageY; 
+                pullDiff = 0; 
+            } 
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (window.scrollY > 0) return;
+            const currentY = e.touches[0].pageY;
+            pullDiff = currentY - startY;
+
+            if (pullDiff > 10) {
+                // 指示器動畫修正：同步考慮 Safe Area 偏移
+                const move = Math.min(pullDiff * 0.3, 50);
+                gsap.set('#ptr-indicator', { y: move, opacity: pullDiff / ptrThreshold });
+                document.getElementById('ptr-icon').innerText = pullDiff >= ptrThreshold ? "Release to sync" : "Pull to sync";
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            if (window.scrollY <= 0 && pullDiff >= ptrThreshold) {
+                gsap.to('#ptr-indicator', { y: 0, opacity: 0, duration: 0.2, onComplete: () => {
+                    const screen = document.getElementById('loading-screen');
+                    screen.style.display = 'flex'; 
+                    screen.style.opacity = '1';
+                    location.reload();
+                }});
+            } else { 
+                gsap.to('#ptr-indicator', { y: -20, opacity: 0, duration: 0.3, ease: "power2.out" }); 
+            }
+            pullDiff = 0;
+        });
+
+        // --- [資料庫與同步] ---
         async function loadStateFromServer() {
             if (!currentUser) return;
             showSync(true);
@@ -274,7 +313,7 @@
             if(el) el.style.opacity = isVisible ? 1 : 0; 
         }
 
-        // --- [視圖切換與 UI 渲染] ---
+        // --- [系統視圖切換] ---
         function switchView(view) {
             const sections = ['view-home', 'view-settings', 'view-history'];
             sections.forEach(s => { 
@@ -293,10 +332,13 @@
             }, 250);
         }
 
+        // --- [渲染邏輯] ---
         function calculateDailyScore(dateStr) { 
             const doneIds = state.completions[dateStr] || []; 
             return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0); 
         }
+        function calculateMonthlyScore(yearMonth) { return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0); }
+        function setFilter(cat) { currentFilter = cat; renderHome(); }
 
         function renderHome() {
             const stats = document.getElementById('stats-dashboard');
@@ -315,12 +357,12 @@
             const displayCats = currentFilter ? [currentFilter] : state.categories;
             quest.innerHTML = displayCats.map(cat => {
                 const catTasks = state.tasks.filter(t => t.category === cat);
-                if (!catTasks.length) return '';
+                if (catTasks.length === 0) return '';
                 return `<div class="mb-6"><h3 class="text-[10px] text-neutral-500 mb-2 uppercase tracking-[0.2em] pl-2 border-l border-white/20">${cat}</h3>
                         <div class="space-y-2">${catTasks.map(t => `
                             <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer hover:bg-neutral-900/40 transition-colors">
-                                <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id)?'checked':''} onchange="toggleTask(${t.id})">
-                                <span class="flex-1 ${doneIds.includes(t.id)?'line-through text-neutral-600':''}">${t.name}</span>
+                                <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
+                                <span class="flex-1 ${doneIds.includes(t.id) ? 'line-through text-neutral-600' : ''}">${t.name}</span>
                                 <span class="text-white font-mono text-sm">${t.score}</span>
                             </label>`).join('')}</div></div>`;
             }).join('');
@@ -360,7 +402,7 @@
             });
         }
 
-        // --- [登入與引導修正邏輯] ---
+        // --- [登入處理與啟動流程] ---
         async function handleLoginSubmit() {
             const input = document.getElementById('user-input-field');
             const username = input.value.trim();
@@ -375,10 +417,9 @@
             }
         }
 
-        // 監聽 Enter 鍵並強制收起鍵盤
         document.getElementById('user-input-field').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                e.target.blur(); // 強制失去焦點，收起鍵盤
+                e.target.blur(); // 強制收起鍵盤
                 handleLoginSubmit();
             }
         });
@@ -388,7 +429,6 @@
             gsap.to(bar, { width: '20%', duration: 0.8, ease: "power2.out" });
 
             if (!currentUser) {
-                // 顯示登入容器
                 document.getElementById('boot-container').classList.add('hidden');
                 const loginBox = document.getElementById('login-container');
                 loginBox.classList.remove('hidden');
@@ -396,11 +436,11 @@
                 gsap.fromTo(loginBox, { opacity: 0, y: 20 }, { 
                     opacity: 1, y: 0, duration: 0.6,
                     onComplete: () => {
-                        // 修正：在動畫完成後 300ms 再對焦，增加 iOS 喚起成功率
+                        // 針對 iOS PWA 的對焦修正：延遲 300ms 並模擬點擊
                         setTimeout(() => {
                             const input = document.getElementById('user-input-field');
                             input.focus();
-                            input.click(); // 模擬點擊以滿足 iOS 鍵盤彈出限制
+                            input.click(); 
                         }, 300);
                     }
                 });
