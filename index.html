@@ -1,461 +1,693 @@
+我希望你可以把說iphone上面被擋住的那次加的東西移除 用下面這個程式去改 不要動到任何其他東西
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ReDopa">
-    <link rel="apple-touch-icon" href="icon.png">
-    <link rel="icon" type="image/png" href="icon.png">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ReDopa</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ReDopa">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" type="image/png" href="icon.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ReDopa</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <style>
-        /* --- [基礎樣式] --- */
-        body { 
-            background-color: #0a0a0a; 
-            color: #f5f5f5; 
-            font-family: sans-serif; 
-            overflow-x: hidden; 
-            overscroll-behavior-y: auto; 
-        }
+    <style>
+        /* --- [基礎與滾動設定] --- */
+        body {
+            background-color: #0a0a0a;
+            color: #f5f5f5;
+            font-family: sans-serif;
+            overflow-x: hidden;
+            overscroll-behavior-y: auto;
+        }
 
-        .glass-card { 
-            background: rgba(23, 23, 23, 0.7); 
-            backdrop-filter: blur(10px); 
-            border: 1px solid rgba(255, 255, 255, 0.05); 
-        }
+        .glass-card {
+            background: rgba(23, 23, 23, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
 
-        /* 視圖定位：移除 env 安全區域偏移 */
-        .view-section { 
-            display: none; 
-            position: absolute; 
-            width: 100%; 
-            left: 0;
-            top: 80px; 
-            padding-bottom: 120px;
-        }
+        /* 視圖定位：避開手機瀏海 Safe Area */
+        .view-section {
+            display: none;
+            position: absolute;
+            width: 100%;
+            left: 0;
+            top: calc(80px + env(safe-area-inset-top));
+            padding-bottom: 120px;
+        }
 
-        .active-view { 
-            display: block; 
-        }
+        .active-view {
+            display: block;
+        }
 
-        /* 導覽列：固定高度 */
-        nav {
-            height: 64px !important;
-        }
+        /* 導覽列安全區域修正 */
+        nav {
+            padding-top: env(safe-area-inset-top);
+            height: calc(64px + env(safe-area-inset-top)) !important;
+        }
 
-        .nav-link.active { 
-            color: #ffffff; 
-            border-bottom: 2px solid #ffffff; 
-        }
+        .nav-link.active {
+            color: #ffffff;
+            border-bottom: 2px solid #ffffff;
+        }
 
-        /* --- [組件樣式] --- */
-        #loading-screen {
-            position: fixed;
-            inset: 0;
-            background-color: #0a0a0a;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.6s ease-out;
-            pointer-events: auto;
-        }
+        /* --- [同步與加載組件] --- */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            background-color: #0a0a0a;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.6s ease-out;
+            pointer-events: auto; /* 確保加載層可被點擊 */
+        }
 
-        #sync-indicator { 
-            position: fixed; 
-            bottom: 20px; 
-            right: 20px; 
-            font-size: 10px; 
-            color: #ffffff; 
-            opacity: 0; 
-            transition: opacity 0.3s; 
-            z-index: 100; 
-        }
+        #sync-indicator {
+            position: fixed;
+            bottom: calc(20px + env(safe-area-inset-bottom));
+            right: 20px;
+            font-size: 10px;
+            color: #ffffff;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 100;
+        }
 
-        /* 下拉指示器：固定位置 */
-        #ptr-indicator {
-            position: fixed;
-            top: 64px; 
-            left: 0;
-            width: 100%;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none;
-            z-index: 40;
-            opacity: 0;
-            transform: translateY(-20px);
-        }
+        #ptr-indicator {
+            position: fixed;
+            top: calc(64px + env(safe-area-inset-top));
+            left: 0;
+            width: 100%;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 40;
+            opacity: 0;
+            transform: translateY(-20px);
+        }
 
-        /* --- [登入輸入修正] --- */
-        .login-input {
-            background: transparent;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            text-align: center;
-            outline: none;
-            padding: 10px;
-            font-size: 18px;
-            letter-spacing: 0.1em;
-            transition: border-color 0.3s;
-            /* 解決 iOS 選取與點擊判定的關鍵 */
-            -webkit-user-select: text !important;
-            user-select: text !important;
-            -webkit-appearance: none;
-            border-radius: 0;
-        }
+        /* --- [登入輸入框：修正 PWA 輸入限制] --- */
+        .login-input {
+            background: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            outline: none;
+            padding: 10px;
+            font-size: 18px;
+            letter-spacing: 0.15em;
+            transition: border-color 0.3s;
+            /* 修正 iOS PWA 無法選取與點擊的問題 */
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            -webkit-appearance: none;
+            border-radius: 0;
+            pointer-events: auto !important;
+        }
 
-        .login-input:focus {
-            border-color: #ffffff;
-        }
-    </style>
+        .login-input:focus {
+            border-color: #ffffff;
+        }
+
+        #login-container {
+            pointer-events: auto !important; /* 強制開放點擊穿透 */
+        }
+    </style>
 </head>
 <body class="px-4 md:px-8">
 
-    <div id="ptr-indicator">
-        <span id="ptr-icon" class="text-[10px] text-neutral-500 uppercase tracking-widest font-bold">Pull to sync</span>
-    </div>
+    <div id="ptr-indicator">
+        <span id="ptr-icon">Pull to sync</span>
+    </div>
 
-    <div id="loading-screen">
-        <img src="icon.png" alt="ReDopa Icon" class="w-20 h-20 mb-10 animate-pulse rounded-2xl grayscale">
-        
-        <div id="boot-container" class="w-64">
-            <div class="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
-                <div id="loading-bar" style="width: 0%" class="h-full bg-white"></div>
-            </div>
-            <p id="boot-text" class="text-[9px] text-neutral-500 mt-4 tracking-[0.3em] uppercase text-center">System Initializing</p>
-        </div>
+    <div id="loading-screen">
+        <img src="icon.png" alt="ReDopa Icon" class="w-20 h-20 mb-10 animate-pulse rounded-2xl grayscale">
+        
+        <div id="boot-container" class="w-64">
+            <div class="w-full h-1 bg-neutral-800 rounded-full overflow-hidden">
+                <div id="loading-bar" style="width: 0%" class="h-full bg-white"></div>
+            </div>
+            <p id="boot-text" class="text-[9px] text-neutral-500 mt-4 tracking-[0.3em] uppercase text-center">Initializing...</p>
+        </div>
 
-        <div id="login-container" class="hidden flex flex-col items-center gap-8 w-full" onclick="document.getElementById('user-input-field').focus()">
-            <p class="text-[10px] text-neutral-500 tracking-[0.4em] uppercase">Identity Required</p>
-            <input type="text" id="user-input-field" class="login-input w-48 text-white" placeholder="USERNAME" autocomplete="off" enterkeyhint="done">
-            <button onclick="handleLoginSubmit()" class="mt-4 px-10 py-3 border border-white/10 rounded-full text-[10px] tracking-widest hover:bg-white hover:text-black transition-all active:scale-95">ENTER SYSTEM</button>
-        </div>
-    </div>
+        <div id="login-container" class="hidden flex flex-col items-center gap-8">
+            <p class="text-[10px] text-neutral-500 tracking-[0.4em] uppercase">Identity Required</p>
+            <input type="text" id="user-input-field" class="login-input w-48 text-white" placeholder="USERNAME" autocomplete="off" enterkeyhint="done">
+            <button onclick="handleLoginSubmit()" class="mt-4 px-10 py-3 border border-white/10 rounded-full text-[10px] tracking-widest hover:bg-white hover:text-black transition-all active:scale-95">ENTER SYSTEM</button>
+        </div>
+    </div>
 
-    <div id="sync-indicator" class="glass-card px-3 py-1 rounded-full border-white/20">☁️ Syncing</div>
+    <div id="sync-indicator" class="glass-card px-3 py-1 rounded-full border-white/20">☁️ Syncing</div>
 
-    <nav class="fixed top-0 left-0 w-full glass-card z-50 border-b border-white/5 px-4">
-        <div class="max-w-2xl mx-auto h-full flex items-center justify-between">
-            <div onclick="location.reload()" class="flex items-center gap-2 cursor-pointer group active:scale-95 transition-transform">
-                <img src="icon.png" alt="Logo" class="w-6 h-6 rounded-md grayscale transition-all border border-white/10">
-                <div class="font-bold text-xl text-white tracking-tighter">ReDopa</div>
-            </div>
-            <div class="flex gap-4 md:gap-6">
-                <button onclick="switchView('home')" id="nav-home" class="nav-link active text-sm md:text-base">主頁</button>
-                <button onclick="switchView('history')" id="nav-history" class="nav-link text-sm md:text-base">歷史</button>
-                <button onclick="switchView('settings')" id="nav-settings" class="nav-link text-sm md:text-base">設定</button>
-            </div>
-        </div>
-    </nav>
+    <nav class="fixed top-0 left-0 w-full glass-card z-50 border-b border-white/5 px-4">
+        <div class="max-w-2xl mx-auto h-full flex items-center justify-between">
+            <div onclick="location.reload()" class="flex items-center gap-2 cursor-pointer group active:scale-95 transition-transform">
+                <img src="icon.png" alt="Logo" class="w-6 h-6 rounded-md grayscale group-hover:grayscale-0 transition-all border border-white/10">
+                <div class="font-bold text-xl text-white tracking-tighter">ReDopa</div>
+            </div>
+            <div class="flex gap-4 md:gap-6">
+                <button onclick="switchView('home')" id="nav-home" class="nav-link active text-sm md:text-base">主頁</button>
+                <button onclick="switchView('history')" id="nav-history" class="nav-link text-sm md:text-base">歷史</button>
+                <button onclick="switchView('settings')" id="nav-settings" class="nav-link text-sm md:text-base">設定</button>
+            </div>
+        </div>
+    </nav>
 
-    <main id="view-home" class="view-section active-view">
-        <div class="max-w-2xl mx-auto">
-            <header class="mb-10 text-center px-4">
-                <h1 class="text-[10px] uppercase tracking-[0.3em] text-neutral-500 mb-2">Neural Reward Accumulation</h1>
-                <div id="total-score" class="text-7xl font-bold text-white">0</div>
-                <p id="status-insight" class="text-xs text-neutral-400 mt-4 italic">"Seeking focus within the silence."</p>
-            </header>
-            <div id="stats-dashboard" class="flex flex-wrap gap-2 mb-10 justify-center px-2"></div>
-            <div class="px-4">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 id="quest-title" class="text-xs font-bold text-neutral-500 uppercase tracking-[0.2em]">Mission Protocol</h2>
-                    <button id="clear-filter" onclick="setFilter(null)" class="hidden text-[10px] text-white border border-white/10 px-2 py-1 rounded">RESET FILTER</button>
-                </div>
-                <div id="quest-container" class="space-y-4"></div>
-            </div>
-        </div>
-    </main>
+    <main id="view-home" class="view-section active-view">
+        <div class="max-w-2xl mx-auto">
+            <header class="mb-8 text-center px-4">
+                <h1 class="text-xs uppercase tracking-[0.2em] text-neutral-500">Reward Accumulation</h1>
+                <div id="total-score" class="text-7xl font-bold text-white my-2">0</div>
+                <p id="status-insight" class="text-xs text-neutral-400 mt-2 italic">"Seeking focus within the silence."</p>
+            </header>
+            <div id="stats-dashboard" class="flex flex-wrap gap-2 mb-8 justify-center px-2"></div>
+            <div class="px-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="quest-title" class="text-sm font-bold text-neutral-400 uppercase tracking-widest">Mission Protocol</h2>
+                    <button id="clear-filter" onclick="setFilter(null)" class="hidden text-[10px] text-white border border-white/20 px-2 py-1 rounded">Show All</button>
+                </div>
+                <div id="quest-container" class="space-y-4"></div>
+            </div>
+        </div>
+    </main>
 
-    <main id="view-history" class="view-section">
-        <div class="max-w-2xl mx-auto px-4">
-            <h1 class="text-2xl font-bold mb-6">📅 歷史軌跡</h1>
-            <div class="glass-card rounded-2xl p-6 mb-8">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xs text-neutral-500 uppercase tracking-widest text-center">Growth Curve</h2>
-                    <div class="flex gap-2">
-                        <button onclick="changeRange('month')" id="btn-month" class="btn-toggle text-[10px] px-3 py-1 rounded-full active">1M</button>
-                        <button onclick="changeRange('year')" id="btn-year" class="btn-toggle text-[10px] px-3 py-1 rounded-full">1Y</button>
-                        <button onclick="changeRange('all')" id="btn-all" class="btn-toggle text-[10px] px-3 py-1 rounded-full">ALL</button>
-                    </div>
-                </div>
-                <div class="h-[200px]"><canvas id="growthChart"></canvas></div>
-            </div>
-            <div class="glass-card rounded-2xl overflow-hidden border border-white/5">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-neutral-900 text-neutral-400 text-[10px] uppercase tracking-widest">
-                        <tr><th class="p-4">Date</th><th class="p-4 text-center">Score</th><th class="p-4">Progress</th></tr>
-                    </thead>
-                    <tbody id="history-table-body" class="text-sm"></tbody>
-                </table>
-            </div>
-        </div>
-    </main>
+    <main id="view-history" class="view-section">
+        <div class="max-w-2xl mx-auto px-4">
+            <h1 class="text-2xl font-bold mb-6">📅 歷史軌跡</h1>
+            <div class="glass-card rounded-2xl p-4 mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xs text-neutral-500 uppercase tracking-widest text-center">Growth Curve</h2>
+                    <div class="flex gap-2">
+                        <button onclick="changeRange('month')" id="btn-month" class="btn-toggle text-[10px] px-3 py-1 rounded-full active">1M</button>
+                        <button onclick="changeRange('year')" id="btn-year" class="btn-toggle text-[10px] px-3 py-1 rounded-full">1Y</button>
+                        <button onclick="changeRange('all')" id="btn-all" class="btn-toggle text-[10px] px-3 py-1 rounded-full">ALL</button>
+                    </div>
+                </div>
+                <div class="h-[200px]"><canvas id="growthChart"></canvas></div>
+            </div>
+            <div class="glass-card rounded-2xl overflow-hidden border border-white/5">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-neutral-900 text-neutral-400 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-4">日期</th>
+                            <th class="p-4 text-center">得分</th>
+                            <th class="p-4">完成度</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body" class="text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
 
-    <main id="view-settings" class="view-section">
-        <div class="max-w-2xl mx-auto px-4">
-            <h1 class="text-2xl font-bold mb-8">⚙️ 核心設定</h1>
-            <section class="glass-card rounded-2xl p-6 mb-8">
-                <h2 class="text-white font-semibold mb-4 border-b border-white/5 pb-2 text-sm uppercase tracking-widest">1. 分類管理</h2>
-                <div class="flex gap-2 mb-4">
-                    <input type="text" id="new-cat-input" placeholder="名稱" class="flex-1 bg-neutral-900 rounded-lg p-3 outline-none border border-white/5 text-sm">
-                    <button onclick="addCategory()" class="bg-white text-black px-6 py-2 rounded-lg text-xs font-bold uppercase">Add</button>
-                </div>
-                <div id="cat-tags" class="flex flex-wrap gap-2"></div>
-            </section>
-            <section class="glass-card rounded-2xl p-6 mb-8">
-                <h2 class="text-white font-semibold mb-4 border-b border-white/5 pb-2 text-sm uppercase tracking-widest">2. 任務定義</h2>
-                <div class="space-y-4 mb-6">
-                    <input type="text" id="task-name" placeholder="內容" class="w-full bg-neutral-900 rounded-lg p-3 outline-none border border-white/5 text-sm">
-                    <div class="flex gap-2">
-                        <select id="task-cat-select" class="flex-1 bg-neutral-900 rounded-lg p-3 outline-none border border-white/5 text-xs"></select>
-                        <input type="number" id="task-score" placeholder="Pts" class="w-24 bg-neutral-900 rounded-lg p-3 outline-none border border-white/5 text-sm">
-                    </div>
-                    <button onclick="addTask()" class="w-full bg-white text-black py-3 rounded-lg text-xs font-bold uppercase tracking-widest">Register Task</button>
-                </div>
-                <ul id="task-manage-list" class="space-y-2 border-t border-white/5 pt-4"></ul>
-            </section>
-            <section class="glass-card rounded-2xl p-6 border-red-900/20 text-center">
-                <button onclick="resetAll()" class="text-red-500/50 border border-red-900/10 px-4 py-1 rounded text-[10px] uppercase tracking-[0.2em]">Factory Reset</button>
-            </section>
-        </div>
-    </main>
+    <main id="view-settings" class="view-section">
+        <div class="max-w-2xl mx-auto px-4">
+            <h1 class="text-2xl font-bold mb-8">⚙️ 核心設定</h1>
+            <section class="glass-card rounded-2xl p-6 mb-8">
+                <h2 class="text-white font-semibold mb-4 border-b border-white/5 pb-2">1. 分類管理</h2>
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="new-cat-input" placeholder="名稱" class="flex-1 bg-neutral-900 rounded-lg p-2 outline-none border border-white/5">
+                    <button onclick="addCategory()" class="bg-white text-black px-4 py-2 rounded-lg text-sm font-bold">新增</button>
+                </div>
+                <div id="cat-tags" class="flex flex-wrap gap-2"></div>
+            </section>
+            <section class="glass-card rounded-2xl p-6 mb-8">
+                <h2 class="text-white font-semibold mb-4 border-b border-white/5 pb-2">2. 任務定義</h2>
+                <div class="space-y-3 mb-6">
+                    <input type="text" id="task-name" placeholder="內容" class="w-full bg-neutral-900 rounded-lg p-2 outline-none border border-white/5">
+                    <div class="flex gap-2">
+                        <select id="task-cat-select" class="flex-1 bg-neutral-900 rounded-lg p-2 outline-none border border-white/5"></select>
+                        <input type="number" id="task-score" placeholder="Pts" class="w-24 bg-neutral-900 rounded-lg p-2 outline-none border border-white/5">
+                    </div>
+                    <button onclick="addTask()" class="w-full bg-white text-black py-2 rounded-lg font-bold">儲存任務</button>
+                </div>
+                <ul id="task-manage-list" class="space-y-2 border-t border-white/5 pt-4"></ul>
+            </section>
+            <section class="glass-card rounded-2xl p-6 border-red-900/20 text-center">
+                <button onclick="resetAll()" class="text-red-500/50 border border-red-900/10 px-4 py-1 rounded text-xs uppercase tracking-widest">Factory Reset</button>
+            </section>
+        </div>
+    </main>
 
-    <script>
-        // --- [Supabase 初始化與狀態管理] ---
-        const supabaseUrl = 'https://okesrvqivpqvahmenafx.supabase.co';
-        const supabaseKey = 'sb_publishable_QCthF4rOOZH0XUb4KQXUtA_I2LZM1JJ';
-        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+    <script>
+        // --- [初始化與變數] ---
+        const supabaseUrl = 'https://okesrvqivpqvahmenafx.supabase.co';
+        const supabaseKey = 'sb_publishable_QCthF4rOOZH0XUb4KQXUtA_I2LZM1JJ';
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-        let state = {
-            categories: JSON.parse(localStorage.getItem('ds_categories')) || ['一般'],
-            tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
-            completions: JSON.parse(localStorage.getItem('ds_completions')) || {}
-        };
-        const today = new Date().toISOString().split('T')[0];
-        let currentUser = localStorage.getItem('redopa_user');
-        let growthChart = null;
-        let currentChartRange = 'month';
-        let currentFilter = null;
-        let isSystemBooting = true; // 狀態鎖：加載中禁用下拉功能
+        let state = {
+            categories: JSON.parse(localStorage.getItem('ds_categories')) || ['一般'],
+            tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
+            completions: JSON.parse(localStorage.getItem('ds_completions')) || {}
+        };
+        const today = new Date().toISOString().split('T')[0];
+        let currentUser = localStorage.getItem('redopa_user');
+        let growthChart = null,
+            currentChartRange = 'month',
+            currentFilter = null;
 
-        // --- [功能：下拉重新整理邏輯修復] ---
-        let startY = 0, pullDiff = 0;
-        const ptrThreshold = 110;
+        // --- [並行下拉重新整理核心邏輯：修正 RWD 偏移] ---
+        let startY = 0,
+            pullDiff = 0;
+        const ptrThreshold = 110;
 
-        window.addEventListener('touchstart', (e) => { 
-            if (isSystemBooting) return; // 鎖定中不觸發
-            if (window.scrollY <= 0) { 
-                startY = e.touches[0].pageY; 
-                pullDiff = 0; 
-            } 
-        }, { passive: true });
+        window.addEventListener('touchstart', (e) => {
+            if (window.scrollY <= 0) {
+                startY = e.touches[0].pageY;
+                pullDiff = 0;
+            }
+        }, {
+            passive: true
+        });
 
-        window.addEventListener('touchmove', (e) => {
-            if (isSystemBooting || window.scrollY > 0) return;
-            const currentY = e.touches[0].pageY;
-            pullDiff = currentY - startY;
+        window.addEventListener('touchmove', (e) => {
+            if (window.scrollY > 0) return;
+            const currentY = e.touches[0].pageY;
+            pullDiff = currentY - startY;
 
-            if (pullDiff > 10) {
-                const move = Math.min(pullDiff * 0.3, 50);
-                gsap.set('#ptr-indicator', { y: move, opacity: pullDiff / ptrThreshold });
-                document.getElementById('ptr-icon').innerText = pullDiff >= ptrThreshold ? "Release to sync" : "Pull to sync";
-            }
-        }, { passive: true });
+            if (pullDiff > 10) {
+                // 指示器動畫修正：同步考慮 Safe Area 偏移
+                const move = Math.min(pullDiff * 0.3, 50);
+                gsap.set('#ptr-indicator', {
+                    y: move,
+                    opacity: pullDiff / ptrThreshold
+                });
+                document.getElementById('ptr-icon').innerText = pullDiff >= ptrThreshold ? "Release to sync" : "Pull to sync";
+            }
+        }, {
+            passive: true
+        });
 
-        window.addEventListener('touchend', (e) => {
-            if (isSystemBooting) return;
-            if (window.scrollY <= 0 && pullDiff >= ptrThreshold) {
-                gsap.to('#ptr-indicator', { y: 0, opacity: 0, duration: 0.2, onComplete: () => {
-                    location.reload(); 
-                }});
-            } else { 
-                gsap.to('#ptr-indicator', { y: -20, opacity: 0, duration: 0.3, ease: "power2.out" }); 
-            }
-            pullDiff = 0;
-        });
+        window.addEventListener('touchend', (e) => {
+            if (window.scrollY <= 0 && pullDiff >= ptrThreshold) {
+                gsap.to('#ptr-indicator', {
+                    y: 0,
+                    opacity: 0,
+                    duration: 0.2,
+                    onComplete: () => {
+                        const screen = document.getElementById('loading-screen');
+                        screen.style.display = 'flex';
+                        screen.style.opacity = '1';
+                        location.reload();
+                    }
+                });
+            } else {
+                gsap.to('#ptr-indicator', {
+                    y: -20,
+                    opacity: 0,
+                    duration: 0.3,
+                    ease: "power2.out"
+                });
+            }
+            pullDiff = 0;
+        });
 
-        // --- [核心同步函式] ---
-        async function loadStateFromServer() {
-            if (!currentUser) return;
-            showSync(true);
-            try {
-                const { data } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
-                if (data?.state_json) state = data.state_json;
-            } catch (err) { console.log("Cloud sync bypassed."); }
-            showSync(false);
-        }
+        // --- [資料庫與同步] ---
+        async function loadStateFromServer() {
+            if (!currentUser) return;
+            showSync(true);
+            try {
+                const {
+                    data
+                } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
+                if (data?.state_json) state = data.state_json;
+            } catch (err) {
+                console.log("Cloud sync bypassed.");
+            }
+            showSync(false);
+        }
 
-        async function saveState() {
-            showSync(true);
-            localStorage.setItem('ds_categories', JSON.stringify(state.categories));
-            localStorage.setItem('ds_tasks', JSON.stringify(state.tasks));
-            localStorage.setItem('ds_completions', JSON.stringify(state.completions));
-            if (currentUser) await supabaseClient.from('redopa_data').upsert({ username: currentUser, state_json: state }, { onConflict: 'username' });
-            showSync(false);
-        }
+        async function saveState() {
+            showSync(true);
+            localStorage.setItem('ds_categories', JSON.stringify(state.categories));
+            localStorage.setItem('ds_tasks', JSON.stringify(state.tasks));
+            localStorage.setItem('ds_completions', JSON.stringify(state.completions));
+            if (currentUser) await supabaseClient.from('redopa_data').upsert({
+                username: currentUser,
+                state_json: state
+            }, {
+                onConflict: 'username'
+            });
+            showSync(false);
+        }
 
-        function showSync(isVisible) { 
-            const el = document.getElementById('sync-indicator'); 
-            if(el) el.style.opacity = isVisible ? 1 : 0; 
-        }
+        function showSync(isVisible) {
+            const el = document.getElementById('sync-indicator');
+            if (el) el.style.opacity = isVisible ? 1 : 0;
+        }
 
-        // --- [UI 控制邏輯] ---
-        function switchView(view) {
-            const sections = ['view-home', 'view-settings', 'view-history'];
-            sections.forEach(s => { 
-                const el = document.getElementById(s); 
-                if (el && el.style.display !== 'none') gsap.to(el, { opacity: 0, y: 10, duration: 0.2, onComplete: () => el.style.display = 'none' }); 
-            });
-            setTimeout(() => {
-                const target = document.getElementById(`view-${view}`);
-                if(target) { target.style.display = 'block'; gsap.fromTo(target, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 }); }
-                document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
-                const navBtn = document.getElementById(`nav-${view}`);
-                if(navBtn) navBtn.classList.add('active');
-                if (view === 'home') renderHome();
-                if (view === 'settings') renderSettings();
-                if (view === 'history') { renderHistory(); renderChart(currentChartRange); }
-            }, 250);
-        }
+        // --- [系統視圖切換] ---
+        function switchView(view) {
+            const sections = ['view-home', 'view-settings', 'view-history'];
+            sections.forEach(s => {
+                const el = document.getElementById(s);
+                if (el && el.style.display !== 'none') gsap.to(el, {
+                    opacity: 0,
+                    y: 10,
+                    duration: 0.2,
+                    onComplete: () => el.style.display = 'none'
+                });
+            });
+            setTimeout(() => {
+                const target = document.getElementById(`view-${view}`);
+                if (target) {
+                    target.style.display = 'block';
+                    gsap.fromTo(target, {
+                        opacity: 0,
+                        y: -10
+                    }, {
+                        opacity: 1,
+                        y: 0,
+                        duration: 0.3
+                    });
+                }
+                document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+                const navBtn = document.getElementById(`nav-${view}`);
+                if (navBtn) navBtn.classList.add('active');
+                if (view === 'home') renderHome();
+                if (view === 'settings') renderSettings();
+                if (view === 'history') {
+                    renderHistory();
+                    renderChart(currentChartRange);
+                }
+            }, 250);
+        }
 
-        function calculateDailyScore(dateStr) { const ids = state.completions[dateStr] || []; return state.tasks.reduce((sum, t) => ids.includes(t.id) ? sum + t.score : sum, 0); }
-        function calculateMonthlyScore(yearMonth) { return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0); }
-        function setFilter(cat) { currentFilter = cat; renderHome(); }
+        // --- [渲染邏輯] ---
+        function calculateDailyScore(dateStr) {
+            const doneIds = state.completions[dateStr] || [];
+            return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
+        }
 
-        function renderHome() {
-            const stats = document.getElementById('stats-dashboard'), quest = document.getElementById('quest-container');
-            if(!stats || !quest) return;
-            const doneIds = state.completions[today] || [];
-            stats.innerHTML = state.categories.map(cat => {
-                const catScore = state.tasks.filter(t => t.category === cat).reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
-                return `<div onclick="setFilter('${cat}')" class="glass-card px-4 py-3 rounded-xl border ${currentFilter===cat?'border-white':'border-white/5'} cursor-pointer min-w-[90px] transition-all">
-                            <div class="text-[9px] text-neutral-500 uppercase font-bold text-center mb-1">${cat}</div>
-                            <div class="text-xl font-bold text-white text-center">${catScore}</div>
-                        </div>`;
-            }).join('');
-            const displayCats = currentFilter ? [currentFilter] : state.categories;
-            quest.innerHTML = displayCats.map(cat => {
-                const tasks = state.tasks.filter(t => t.category === cat);
-                if (!tasks.length) return '';
-                return `<div class="mb-8"><h3 class="text-[9px] text-neutral-600 mb-3 uppercase tracking-widest pl-2 border-l border-white/20">${cat}</h3>
-                        <div class="space-y-2">${tasks.map(t => `<label class="glass-card p-5 rounded-2xl flex items-center gap-4 cursor-pointer active:bg-white/5 transition-colors">
-                            <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id)?'checked':''} onchange="toggleTask(${t.id})">
-                            <span class="flex-1 text-sm ${doneIds.includes(t.id)?'line-through text-neutral-600':''}">${t.name}</span>
-                            <span class="text-white font-mono text-xs">${t.score}</span>
-                        </label>`).join('')}</div></div>`;
-            }).join('');
-            gsap.to("#total-score", { innerHTML: calculateDailyScore(today), duration: 0.5, snap: { innerHTML: 1 } });
-        }
+        function calculateMonthlyScore(yearMonth) {
+            return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0);
+        }
 
-        // --- [管理功能] ---
-        function toggleTask(id) { if (!state.completions[today]) state.completions[today] = []; const idx = state.completions[today].indexOf(id); if (idx > -1) state.completions[today].splice(idx, 1); else state.completions[today].push(id); saveState(); renderHome(); }
-        function addCategory() { const val = document.getElementById('new-cat-input').value.trim(); if (val && !state.categories.includes(val)) { state.categories.push(val); saveState(); renderSettings(); document.getElementById('new-cat-input').value = ''; } }
-        function addTask() { 
-            const name = document.getElementById('task-name').value.trim(), cat = document.getElementById('task-cat-select').value, score = parseInt(document.getElementById('task-score').value) || 0; 
-            if (name && cat) { state.tasks.push({ id: Date.now(), name, category: cat, score }); saveState(); renderSettings(); document.getElementById('task-name').value = ''; document.getElementById('task-score').value = ''; } 
-        }
-        function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); saveState(); renderSettings(); }
-        function deleteCategory(catName) { if (catName === '一般') return alert("不可刪除預設"); if (confirm(`確定刪除「${catName}」？`)) { state.categories = state.categories.filter(c => c !== catName); state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); saveState(); renderSettings(); } }
-        function resetAll() { if (confirm("確定重置數據？")) { localStorage.clear(); location.reload(); } }
-        function renderSettings() {
-            document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
-            document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
-            document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `<li class="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg text-sm border border-white/5"><div class="flex items-center gap-2"><span class="text-[10px] text-neutral-500">[${t.category}]</span>${t.name}</div><div class="flex items-center gap-4"><span class="font-bold text-white">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-900">✕</button></div></li>`).join('');
-        }
-        function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records found.</td></tr>'; }
-        function changeRange(range) { currentChartRange = range; document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); document.getElementById(`btn-${range}`).classList.add('active'); renderChart(range); }
-        function renderChart(range) {
-            const canvas = document.getElementById('growthChart');
-            if(!canvas) return;
-            const ctx = canvas.getContext('2d');
-            let labels = [], scores = [];
-            if (range === 'month') { for (let i = 29; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); labels.push(d.toISOString().split('T')[0].slice(5)); scores.push(calculateDailyScore(d.toISOString().split('T')[0])); } }
-            else if (range === 'year') { for (let i = 11; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); labels.push(d.toISOString().slice(0, 7)); scores.push(calculateMonthlyScore(d.toISOString().slice(0, 7))); } }
-            if (growthChart) growthChart.destroy();
-            growthChart = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range === 'month' ? 0 : 3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#525252' } }, x: { grid: { display: false }, ticks: { color: '#525252' } } } } });
-        }
+        function setFilter(cat) {
+            currentFilter = cat;
+            renderHome();
+        }
 
-        // --- [登入與系統引導流程修復] ---
-        async function handleLoginSubmit() {
-            const input = document.getElementById('user-input-field');
-            const username = input.value.trim();
-            if (username) {
-                currentUser = username;
-                localStorage.setItem('redopa_user', currentUser);
-                gsap.to('#login-container', { opacity: 0, y: 10, duration: 0.3, onComplete: () => {
-                    document.getElementById('login-container').classList.add('hidden');
-                    document.getElementById('boot-container').classList.remove('hidden');
-                    continueBootstrap();
-                }});
-            }
-        }
+        function renderHome() {
+            const stats = document.getElementById('stats-dashboard');
+            const quest = document.getElementById('quest-container');
+            if (!stats || !quest) return;
+            const doneIds = state.completions[today] || [];
+            
+            stats.innerHTML = state.categories.map(cat => {
+                const catScore = state.tasks.filter(t => t.category === cat).reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
+                const isActive = currentFilter === cat ? 'border-white bg-white/10' : 'border-white/5';
+                return `<div onclick="setFilter('${cat}')" class="glass-card px-4 py-2 rounded-xl border ${isActive} cursor-pointer transition-all hover:scale-105 min-w-[80px]">
+                            <div class="text-[10px] text-neutral-500 uppercase font-bold text-center">${cat}</div>
+                            <div class="text-xl font-bold text-white text-center">${catScore}</div>
+                        </div>`;
+            }).join('');
+            
+            document.getElementById('clear-filter').style.display = currentFilter ? 'block' : 'none';
+            const displayCats = currentFilter ? [currentFilter] : state.categories;
+            
+            quest.innerHTML = displayCats.map(cat => {
+                const catTasks = state.tasks.filter(t => t.category === cat);
+                if (catTasks.length === 0) return '';
+                return `<div class="mb-6"><h3 class="text-[10px] text-neutral-500 mb-2 uppercase tracking-[0.2em] pl-2 border-l border-white/20">${cat}</h3>
+                        <div class="space-y-2">${catTasks.map(t => `
+                            <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer hover:bg-neutral-900/40 transition-colors">
+                                <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
+                                <span class="flex-1 ${doneIds.includes(t.id) ? 'line-through text-neutral-600' : ''}">${t.name}</span>
+                                <span class="text-white font-mono text-sm">${t.score}</span>
+                            </label>`).join('')}</div></div>`;
+            }).join('');
+            
+            gsap.to("#total-score", {
+                innerHTML: calculateDailyScore(today),
+                duration: 0.5,
+                snap: {
+                    innerHTML: 1
+                }
+            });
+        }
 
-        async function bootstrap() {
-            const bar = document.getElementById('loading-bar');
-            isSystemBooting = true; // 系統啟動鎖：開啟
-            gsap.to(bar, { width: '0%', duration: 0.8, ease: "power2.out" });
+        // --- [管理功能集] ---
+        function toggleTask(id) {
+            if (!state.completions[today]) state.completions[today] = [];
+            const idx = state.completions[today].indexOf(id);
+            if (idx > -1) state.completions[today].splice(idx, 1);
+            else state.completions[today].push(id);
+            saveState();
+            renderHome();
+        }
 
-            if (!currentUser) {
-                document.getElementById('boot-container').classList.add('hidden');
-                const loginBox = document.getElementById('login-container');
-                loginBox.classList.remove('hidden');
-                gsap.fromTo(loginBox, { opacity: 0, y: 20 }, { 
-                    opacity: 1, y: 0, duration: 0.6,
-                    onComplete: () => {
-                        // iOS PWA 對焦強化邏輯
-                        setTimeout(() => {
-                            const input = document.getElementById('user-input-field');
-                            input.focus();
-                            input.click(); 
-                        }, 500);
-                    }
-                });
-            } else {
-                continueBootstrap();
-            }
-        }
+        function addCategory() {
+            const val = document.getElementById('new-cat-input').value.trim();
+            if (val && !state.categories.includes(val)) {
+                state.categories.push(val);
+                saveState();
+                renderSettings();
+                document.getElementById('new-cat-input').value = '';
+            }
+        }
 
-        async function continueBootstrap() {
-            const bar = document.getElementById('loading-bar');
-            gsap.to(bar, { width: '60%', duration: 0.5 });
-            await loadStateFromServer();
-            gsap.to(bar, { 
-                width: '100%', duration: 0.4, 
-                onComplete: () => {
-                    setTimeout(() => {
-                        const screen = document.getElementById('loading-screen');
-                        if(screen) {
-                            screen.style.opacity = '0';
-                            setTimeout(() => { 
-                                screen.style.display = 'none'; 
-                                isSystemBooting = false; // 系統啟動鎖：關閉，恢復下拉重整
-                                renderHome(); 
-                            }, 600);
-                        }
-                    }, 0);
-                }
-            });
-        }
+        function addTask() {
+            const name = document.getElementById('task-name').value.trim(),
+                cat = document.getElementById('task-cat-select').value,
+                score = parseInt(document.getElementById('task-score').value) || 0;
+            if (name && cat) {
+                state.tasks.push({
+                    id: Date.now(),
+                    name,
+                    category: cat,
+                    score
+                });
+                saveState();
+                renderSettings();
+                document.getElementById('task-name').value = '';
+                document.getElementById('task-score').value = '';
+            }
+        }
 
-        // 監聽鍵盤行為
-        document.getElementById('user-input-field').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.target.blur();
-                handleLoginSubmit();
-            }
-        });
+        function deleteTask(id) {
+            state.tasks = state.tasks.filter(t => t.id !== id);
+            saveState();
+            renderSettings();
+        }
 
-        bootstrap();
-    </script>
+        function deleteCategory(catName) {
+            if (catName === '一般') return alert("不可刪除預設");
+            if (confirm(`確定刪除「${catName}」？`)) {
+                state.categories = state.categories.filter(c => c !== catName);
+                state.tasks = state.tasks.map(t => t.category === catName ? { ...t,
+                    category: '一般'
+                } : t);
+                saveState();
+                renderSettings();
+            }
+        }
+
+        function resetAll() {
+            if (confirm("確定重置數據？")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        function renderSettings() {
+            document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
+            document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `<li class="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg text-sm border border-white/5"><div class="flex items-center gap-2"><span class="text-[10px] text-neutral-500">[${t.category}]</span>${t.name}</div><div class="flex items-center gap-4"><span class="font-bold text-white">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-900">✕</button></div></li>`).join('');
+        }
+
+        function renderHistory() {
+            const dates = Object.keys(state.completions).sort().reverse();
+            document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>';
+        }
+
+        function changeRange(range) {
+            currentChartRange = range;
+            document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${range}`).classList.add('active');
+            renderChart(range);
+        }
+
+        function renderChart(range) {
+            const canvas = document.getElementById('growthChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let labels = [],
+                scores = [];
+            
+            if (range === 'month') {
+                for (let i = 29; i >= 0; i--) {
+                    const d = new Date();
+                    d.setDate(d.getDate() - i);
+                    const ds = d.toISOString().split('T')[0];
+                    labels.push(ds.slice(5));
+                    scores.push(calculateDailyScore(ds));
+                }
+            } else if (range === 'year') {
+                for (let i = 11; i >= 0; i--) {
+                    const d = new Date();
+                    d.setMonth(d.getMonth() - i);
+                    const ym = d.toISOString().slice(0, 7);
+                    labels.push(ym);
+                    scores.push(calculateMonthlyScore(ym));
+                }
+            } else if (range === 'all') {
+                const dates = Object.keys(state.completions).sort();
+                if (dates.length) {
+                    let curr = new Date(dates[0].slice(0, 7));
+                    while (curr <= new Date()) {
+                        const ym = curr.toISOString().slice(0, 7);
+                        labels.push(ym);
+                        scores.push(calculateMonthlyScore(ym));
+                        curr.setMonth(curr.setMonth() + 1);
+                    }
+                }
+            }
+            
+            if (growthChart) growthChart.destroy();
+            growthChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: scores,
+                        borderColor: '#ffffff',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        borderWidth: 1.5,
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: range === 'month' ? 0 : 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.03)'
+                            },
+                            ticks: {
+                                color: '#525252'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#525252'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- [登入處理與啟動流程] ---
+        async function handleLoginSubmit() {
+            const input = document.getElementById('user-input-field');
+            const username = input.value.trim();
+            if (username) {
+                currentUser = username;
+                localStorage.setItem('redopa_user', currentUser);
+                gsap.to('#login-container', {
+                    opacity: 0,
+                    y: 10,
+                    duration: 0.3,
+                    onComplete: () => {
+                        document.getElementById('login-container').classList.add('hidden');
+                        document.getElementById('boot-container').classList.remove('hidden');
+                        continueBootstrap();
+                    }
+                });
+            }
+        }
+
+        document.getElementById('user-input-field').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.target.blur(); // 強制收起鍵盤
+                handleLoginSubmit();
+            }
+        });
+
+        async function bootstrap() {
+            const bar = document.getElementById('loading-bar');
+            gsap.to(bar, {
+                width: '0%',
+                duration: 0.8,
+                ease: "power2.out"
+            });
+
+            if (!currentUser) {
+                document.getElementById('boot-container').classList.add('hidden');
+                const loginBox = document.getElementById('login-container');
+                loginBox.classList.remove('hidden');
+
+                gsap.fromTo(loginBox, {
+                    opacity: 0,
+                    y: 20
+                }, {
+                    opacity: 1,
+                    y: 0,
+                    duration: 0.6,
+                    onComplete: () => {
+                        // 針對 iOS PWA 的對焦修正：延遲 300ms 並模擬點擊
+                        setTimeout(() => {
+                            const input = document.getElementById('user-input-field');
+                            input.focus();
+                            input.click();
+                        }, 300);
+                    }
+                });
+            } else {
+                continueBootstrap();
+            }
+        }
+
+        async function continueBootstrap() {
+            const bar = document.getElementById('loading-bar');
+            gsap.to(bar, {
+                width: '60%',
+                duration: 0.5
+            });
+            await loadStateFromServer();
+            gsap.to(bar, {
+                width: '100%',
+                duration: 0.4,
+                onComplete: () => {
+                    setTimeout(() => {
+                        const screen = document.getElementById('loading-screen');
+                        if (screen) {
+                            screen.style.opacity = '0';
+                            setTimeout(() => {
+                                screen.style.display = 'none';
+                                renderHome();
+                            }, 600);
+                        }
+                    }, 0);
+                }
+            });
+        }
+
+        bootstrap();
+    </script>
 </body>
 </html>
