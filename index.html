@@ -24,12 +24,6 @@
             font-family: sans-serif;
             overflow-x: hidden;
             overscroll-behavior-y: auto;
-            /* 修正：防止 iOS 整體彈性滾動影響 PWA */
-            position: fixed;
-            width: 100%;
-            height: 100%;
-            overflow-y: scroll;
-            -webkit-overflow-scrolling: touch;
         }
 
         .glass-card {
@@ -103,46 +97,30 @@
             transform: translateY(-20px);
         }
 
-        /* --- [登入輸入框：PWA 終極修正版] --- */
-        /* --- 修正後的 .login-input --- */
-.login-input {
-    background: transparent;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    text-align: center;
-    outline: none;
-    padding: 10px;
-    font-size: 18px;
-    letter-spacing: 0.15em;
-    transition: border-color 0.3s;
-    
-    /* === 關鍵修正開始 === */
-    /* 1. 確保 iOS 允許文字選取 */
-    -webkit-user-select: text !important;
-    user-select: text !important;
-    
-    /* 2. 禁止 iOS 雙擊縮放，並優化點擊判定 */
-    touch-action: manipulation;
-    
-    /* 3. 修復 iOS PWA 渲染層級問題 (避免輸入框被當作背景) */
-    transform: translate3d(0, 0, 0); 
-    
-    /* 4. 強制外觀重置 */
-    -webkit-appearance: none;
-    border-radius: 0;
-    pointer-events: auto !important;
-    z-index: 10001; /* 確保層級高於遮罩 */
-    /* === 關鍵修正結束 === */
-}
+        /* --- [登入輸入框：修正 PWA 輸入限制] --- */
+        .login-input {
+            background: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            outline: none;
+            padding: 10px;
+            font-size: 18px;
+            letter-spacing: 0.15em;
+            transition: border-color 0.3s;
+            /* 修正 iOS PWA 無法選取與點擊的問題 */
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            -webkit-appearance: none;
+            border-radius: 0;
+            pointer-events: auto !important;
+        }
 
         .login-input:focus {
             border-color: #ffffff;
         }
 
         #login-container {
-            /* 確保容器也在最上層 */
-            position: relative;
-            z-index: 10000;
-            pointer-events: auto !important; 
+            pointer-events: auto !important; /* 強制開放點擊穿透 */
         }
     </style>
 </head>
@@ -164,7 +142,7 @@
 
         <div id="login-container" class="hidden flex flex-col items-center gap-8">
             <p class="text-[10px] text-neutral-500 tracking-[0.4em] uppercase">Identity Required</p>
-            <input type="text" id="user-input-field" class="login-input w-48 text-white" placeholder="USERNAME" autocomplete="off" enterkeyhint="done" onclick="this.focus()">
+            <input type="text" id="user-input-field" class="login-input w-48 text-white" placeholder="USERNAME" autocomplete="off" enterkeyhint="done">
             <button onclick="handleLoginSubmit()" class="mt-4 px-10 py-3 border border-white/10 rounded-full text-[10px] tracking-widest hover:bg-white hover:text-black transition-all active:scale-95">ENTER SYSTEM</button>
         </div>
     </div>
@@ -278,26 +256,12 @@
             currentChartRange = 'month',
             currentFilter = null;
 
-        // --- [並行下拉重新整理核心邏輯] ---
+        // --- [並行下拉重新整理核心邏輯：修正 RWD 偏移] ---
         let startY = 0,
             pullDiff = 0;
         const ptrThreshold = 110;
 
-        // ============================================
-        // 修正重點：在全域 touchstart 加入判斷
-        // 只要觸摸目標是 Login Container 或是 Input，直接 Return
-        // ============================================
         window.addEventListener('touchstart', (e) => {
-            // 1. 如果點擊的是輸入框，忽略下拉偵測
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                return;
-            }
-
-            // 2. 如果點擊的是登入區域內部，忽略下拉偵測
-            if (e.target.closest('#login-container')) {
-                return;
-            }
-
             if (window.scrollY <= 0) {
                 startY = e.touches[0].pageY;
                 pullDiff = 0;
@@ -307,14 +271,12 @@
         });
 
         window.addEventListener('touchmove', (e) => {
-            // 如果 startY 沒有被設定（代表被上面的 return 擋掉了），就不執行
-            if (startY === 0) return;
-
             if (window.scrollY > 0) return;
             const currentY = e.touches[0].pageY;
             pullDiff = currentY - startY;
 
             if (pullDiff > 10) {
+                // 指示器動畫修正：同步考慮 Safe Area 偏移
                 const move = Math.min(pullDiff * 0.3, 50);
                 gsap.set('#ptr-indicator', {
                     y: move,
@@ -327,9 +289,6 @@
         });
 
         window.addEventListener('touchend', (e) => {
-            // 如果沒開始，就不用結束
-            if (startY === 0) return;
-
             if (window.scrollY <= 0 && pullDiff >= ptrThreshold) {
                 gsap.to('#ptr-indicator', {
                     y: 0,
@@ -351,7 +310,6 @@
                 });
             }
             pullDiff = 0;
-            startY = 0; // 重置
         });
 
         // --- [資料庫與同步] ---
@@ -689,8 +647,14 @@
                     opacity: 1,
                     y: 0,
                     duration: 0.6,
-                    // 修正：移除這裡的自動 focus 與 click 程式碼
-                    // 讓使用者自己去點，避免 iOS 鍵盤彈出邏輯衝突
+                    onComplete: () => {
+                        // 針對 iOS PWA 的對焦修正：延遲 300ms 並模擬點擊
+                        setTimeout(() => {
+                            const input = document.getElementById('user-input-field');
+                            input.focus();
+                            input.click();
+                        }, 300);
+                    }
                 });
             } else {
                 continueBootstrap();
@@ -726,4 +690,3 @@
     </script>
 </body>
 </html>
-
