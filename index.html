@@ -17,14 +17,58 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
-        body { background-color: #0a0a0a; color: #f5f5f5; font-family: sans-serif; overflow-x: hidden; overscroll-behavior-y: auto; }
-        .glass-card { background: rgba(23, 23, 23, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .view-section { display: none; position: absolute; width: 100%; top: 80px; }
-        .active-view { display: block; }
-        .nav-link.active { color: #ffffff; border-bottom: 2px solid #ffffff; }
-        .btn-toggle { background: rgba(38, 38, 38, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.3s; }
-        .btn-toggle.active { background: #ffffff; color: #0a0a0a; border-color: #ffffff; }
-        #sync-indicator { position: fixed; bottom: 20px; right: 20px; font-size: 10px; color: #ffffff; opacity: 0; transition: opacity 0.3s; z-index: 100; }
+        body { 
+            background-color: #0a0a0a; 
+            color: #f5f5f5; 
+            font-family: sans-serif; 
+            overflow-x: hidden; 
+            overscroll-behavior-y: auto; 
+        }
+
+        .glass-card { 
+            background: rgba(23, 23, 23, 0.7); 
+            backdrop-filter: blur(10px); 
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+        }
+
+        .view-section { 
+            display: none; 
+            position: absolute; 
+            width: 100%; 
+            top: 80px; 
+        }
+
+        .active-view { 
+            display: block; 
+        }
+
+        .nav-link.active { 
+            color: #ffffff; 
+            border-bottom: 2px solid #ffffff; 
+        }
+
+        .btn-toggle { 
+            background: rgba(38, 38, 38, 0.8); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            transition: all 0.3s; 
+        }
+
+        .btn-toggle.active { 
+            background: #ffffff; 
+            color: #0a0a0a; 
+            border-color: #ffffff; 
+        }
+
+        #sync-indicator { 
+            position: fixed; 
+            bottom: 20px; 
+            right: 20px; 
+            font-size: 10px; 
+            color: #ffffff; 
+            opacity: 0; 
+            transition: opacity 0.3s; 
+            z-index: 100; 
+        }
         
         #loading-screen {
             position: fixed;
@@ -52,7 +96,14 @@
             opacity: 0;
             transform: translateY(-20px);
         }
-        #ptr-icon { font-size: 10px; color: #525252; tracking: 0.3em; text-transform: uppercase; font-weight: bold; }
+
+        #ptr-icon { 
+            font-size: 10px; 
+            color: #525252; 
+            tracking: 0.3em; 
+            text-transform: uppercase; 
+            font-weight: bold; 
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -64,7 +115,7 @@
     <div id="loading-screen">
         <img src="icon.png" alt="ReDopa Icon" class="w-24 h-24 mb-6 animate-pulse rounded-2xl grayscale">
         <div class="w-48 h-1 bg-neutral-800 rounded-full overflow-hidden">
-            <div id="loading-bar" style="width: 0%" class="h-full bg-white transition-all duration-700 ease-in-out"></div>
+            <div id="loading-bar" style="width: 0%" class="h-full bg-white"></div>
         </div>
         <p class="text-[10px] text-neutral-500 mt-4 tracking-[0.3em] uppercase">Synchronizing Neural Data...</p>
     </div>
@@ -161,7 +212,7 @@
         let currentUser = localStorage.getItem('redopa_user');
         let growthChart = null, currentChartRange = 'month', currentFilter = null;
 
-        // 下拉重整邏輯
+        // 下拉重整
         let startY = 0, pullDiff = 0;
         const ptrThreshold = 110;
         window.addEventListener('touchstart', (e) => { if (window.scrollY <= 0) { startY = e.touches[0].pageY; pullDiff = 0; } }, { passive: true });
@@ -192,7 +243,7 @@
             try {
                 const { data } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
                 if (data?.state_json) state = data.state_json;
-            } catch (err) { console.log("Cloud sync bypassed."); }
+            } catch (err) { console.log("Offline mode."); }
             showSync(false);
         }
 
@@ -214,15 +265,23 @@
                 const target = document.getElementById(`view-${view}`);
                 if(target) { target.style.display = 'block'; gsap.fromTo(target, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 }); }
                 document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
-                document.getElementById(`nav-${view}`).classList.add('active');
+                const navBtn = document.getElementById(`nav-${view}`);
+                if(navBtn) navBtn.classList.add('active');
                 if (view === 'home') renderHome();
                 if (view === 'settings') renderSettings();
                 if (view === 'history') { renderHistory(); renderChart(currentChartRange); }
             }, 250);
         }
 
-        function calculateDailyScore(dateStr) { const doneIds = state.completions[dateStr] || []; return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0); }
-        function calculateMonthlyScore(yearMonth) { return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0); }
+        function calculateDailyScore(dateStr) { 
+            const doneIds = state.completions[dateStr] || []; 
+            return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0); 
+        }
+
+        function calculateMonthlyScore(yearMonth) { 
+            return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0); 
+        }
+
         function setFilter(cat) { currentFilter = cat; renderHome(); }
 
         function renderHome() {
@@ -230,6 +289,7 @@
             const questContainer = document.getElementById('quest-container');
             if(!statsContainer || !questContainer) return;
             const doneIds = state.completions[today] || [];
+            
             statsContainer.innerHTML = state.categories.map(cat => {
                 const catScore = state.tasks.filter(t => t.category === cat).reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
                 const isActive = currentFilter === cat ? 'border-white bg-white/10' : 'border-white/5';
@@ -238,6 +298,7 @@
                             <div class="text-xl font-bold text-white text-center">${catScore}</div>
                         </div>`;
             }).join('');
+
             document.getElementById('clear-filter').style.display = currentFilter ? 'block' : 'none';
             const displayCats = currentFilter ? [currentFilter] : state.categories;
             questContainer.innerHTML = displayCats.map(cat => {
@@ -245,7 +306,7 @@
                 if (catTasks.length === 0) return '';
                 return `<div class="mb-6"><h3 class="text-[10px] text-neutral-500 mb-2 uppercase tracking-[0.2em] pl-2 border-l border-white/20">${cat}</h3>
                         <div class="space-y-2">${catTasks.map(t => `
-                            <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer transition-colors">
+                            <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer">
                                 <input type="checkbox" class="w-5 h-5 accent-white" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
                                 <span class="flex-1 ${doneIds.includes(t.id) ? 'line-through text-neutral-600' : ''}">${t.name}</span>
                                 <span class="text-white font-mono text-sm">${t.score}</span>
@@ -259,7 +320,7 @@
             let labels = [], scores = [];
             if (range === 'month') { for (let i = 29; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const ds = d.toISOString().split('T')[0]; labels.push(ds.slice(5)); scores.push(calculateDailyScore(ds)); } }
             else if (range === 'year') { for (let i = 11; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); const ym = d.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); } }
-            else if (range === 'all') { const dates = Object.keys(state.completions).sort(); if(dates.length) { let curr = new Date(dates[0].slice(0, 7)); while(curr <= new Date()) { const ym = curr.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); curr.setMonth(curr.setMonth() + 1); } } }
+            else if (range === 'all') { const dates = Object.keys(state.completions).sort(); if(dates.length) { let curr = new Date(dates[0].slice(0, 7)); while(curr <= new Date()) { labels.push(curr.toISOString().slice(0, 7)); scores.push(calculateMonthlyScore(curr.toISOString().slice(0, 7))); curr.setMonth(curr.setMonth() + 1); } } }
             if (growthChart) growthChart.destroy();
             growthChart = new Chart(ctx, {
                 type: 'line',
@@ -272,7 +333,7 @@
         function addCategory() { const val = document.getElementById('new-cat-input').value.trim(); if (val && !state.categories.includes(val)) { state.categories.push(val); saveState(); renderSettings(); document.getElementById('new-cat-input').value = ''; } }
         function addTask() { const name = document.getElementById('task-name').value.trim(), cat = document.getElementById('task-cat-select').value, score = parseInt(document.getElementById('task-score').value) || 0; if (name && cat) { state.tasks.push({ id: Date.now(), name, category: cat, score }); saveState(); renderSettings(); document.getElementById('task-name').value = ''; document.getElementById('task-score').value = ''; } }
         function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); saveState(); renderSettings(); }
-        function resetAll() { if (confirm("重置數據？")) { localStorage.clear(); location.reload(); } }
+        function resetAll() { if (confirm("確定重置數據？")) { localStorage.clear(); location.reload(); } }
         function renderSettings() {
             document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
             document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -281,19 +342,45 @@
         function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; }
         function changeRange(range) { currentChartRange = range; document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); document.getElementById(`btn-${range}`).classList.add('active'); renderChart(range); }
 
+        // --- [核心引導優化：解決閃跳] ---
         async function bootstrap() {
             const bar = document.getElementById('loading-bar');
-            // 延遲 50ms 再啟動動畫，確保 DOM 已掛載
-            setTimeout(() => { if(bar) bar.style.width = '30%'; }, 50);
-            if (!currentUser) { currentUser = prompt("IDENTITY REQUIRED:"); if (currentUser) localStorage.setItem('redopa_user', currentUser); else { document.getElementById('loading-screen').style.display='none'; return; } }
-            if(bar) bar.style.width = '60%';
+            
+            // 使用 GSAP 平滑動畫到 30%
+            gsap.to(bar, { width: '30%', duration: 0.8, ease: "power2.out" });
+
+            if (!currentUser) {
+                currentUser = prompt("IDENTITY REQUIRED:");
+                if (currentUser) localStorage.setItem('redopa_user', currentUser);
+                else { document.getElementById('loading-screen').style.display='none'; return; }
+            }
+
+            // 平滑動畫到 60%
+            gsap.to(bar, { width: '60%', duration: 0.5, ease: "power2.out" });
+
             await loadStateFromServer();
-            if(bar) bar.style.width = '100%';
-            setTimeout(() => { 
-                const screen = document.getElementById('loading-screen');
-                if(screen) { screen.style.opacity = '0'; setTimeout(() => { screen.style.display = 'none'; renderHome(); }, 600); }
-            }, 300);
+
+            // 最後衝刺到 100%
+            gsap.to(bar, { 
+                width: '100%', 
+                duration: 0.4, 
+                ease: "power2.inOut",
+                onComplete: () => {
+                    // 完成後延遲一下才淡出畫面
+                    setTimeout(() => {
+                        const screen = document.getElementById('loading-screen');
+                        if(screen) {
+                            screen.style.opacity = '0';
+                            setTimeout(() => {
+                                screen.style.display = 'none';
+                                renderHome();
+                            }, 600);
+                        }
+                    }, 200);
+                }
+            });
         }
+
         bootstrap();
     </script>
 </body>
