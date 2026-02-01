@@ -44,9 +44,7 @@
             <div id="total-score" class="text-7xl font-bold text-emerald-400">0</div>
             <p id="status-insight" class="text-xs text-slate-500 mt-2 italic">"準備好開始今天的重建了嗎？"</p>
         </header>
-
         <div id="stats-dashboard" class="flex flex-wrap gap-2 mb-8 justify-center"></div>
-
         <div class="flex justify-between items-center mb-4">
             <h2 id="quest-title" class="text-sm font-bold text-slate-400 uppercase tracking-widest pl-2">Quest Log</h2>
             <button id="clear-filter" onclick="setFilter(null)" class="hidden text-[10px] text-emerald-500 border border-emerald-500/30 px-2 py-1 rounded">顯示全部</button>
@@ -56,7 +54,6 @@
 
     <main id="view-history" class="view-section max-w-2xl mx-auto pb-20">
         <h1 class="text-2xl font-bold mb-6">📅 成長歷史紀錄</h1>
-        
         <div class="glass-card rounded-2xl p-4 mb-8">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xs text-slate-400 uppercase tracking-widest">Growth Trend</h2>
@@ -68,7 +65,6 @@
             </div>
             <canvas id="growthChart" height="180"></canvas>
         </div>
-
         <div class="glass-card rounded-2xl overflow-hidden">
             <table class="w-full text-left border-collapse">
                 <thead class="bg-slate-800/80 text-emerald-400 text-xs uppercase tracking-wider">
@@ -85,7 +81,6 @@
 
     <main id="view-settings" class="view-section max-w-xl mx-auto pb-20">
         <h1 class="text-2xl font-bold mb-8">⚙️ 系統設定中心</h1>
-        
         <section class="glass-card rounded-2xl p-6 mb-8">
             <h2 class="text-emerald-400 font-semibold mb-4">1. 分類管理</h2>
             <div class="flex gap-2 mb-4">
@@ -94,7 +89,6 @@
             </div>
             <div id="cat-tags" class="flex flex-wrap gap-2"></div>
         </section>
-
         <section class="glass-card rounded-2xl p-6 mb-8">
             <h2 class="text-emerald-400 font-semibold mb-4">2. 任務管理</h2>
             <div class="space-y-3 mb-6">
@@ -107,7 +101,6 @@
             </div>
             <ul id="task-manage-list" class="space-y-2 border-t border-slate-700 pt-4"></ul>
         </section>
-
         <section class="glass-card rounded-2xl p-6 border-red-500/30 text-center">
             <h2 class="text-red-400 font-semibold mb-2">3. 危險區域</h2>
             <button onclick="resetAll()" class="text-red-500 border border-red-500/50 px-4 py-1 rounded hover:bg-red-500/10 transition-all text-sm">重置全部資料</button>
@@ -118,9 +111,10 @@
         // --- [1. 初始化 Supabase] ---
         const supabaseUrl = 'https://okesrvqivpqvahmenafx.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rZXNydnFpdnBxdmFobWVuYWZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5NTM0MzUsImV4cCI6MjA4NTUyOTQzNX0.r4SpcQvRd96aJIoRRyxX9yKbJRFzqZ1MAq4XKXjK5HY';
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        // 注意：這裡改名為 supabaseClient 避免名稱衝突
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- [2. 狀態與全域變數] ---
+        // --- [2. 狀態管理] ---
         let state = {
             categories: JSON.parse(localStorage.getItem('ds_categories')) || ['其他'],
             tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
@@ -133,12 +127,12 @@
         let currentChartRange = 'month';
         let currentFilter = null;
 
-        // --- [3. 雲端同步邏輯] ---
+        // --- [3. 同步邏輯] ---
         async function loadStateFromServer() {
             if (!currentUser) return;
             showSync(true);
             try {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from('redopa_data')
                     .select('state_json')
                     .eq('username', currentUser)
@@ -149,26 +143,21 @@
                     console.log("雲端資料同步成功");
                 }
             } catch (err) {
-                console.log("查無雲端紀錄或連線問題，使用本地資料。");
+                console.log("查無雲端紀錄，使用本地資料。");
             }
             showSync(false);
         }
 
         async function saveState() {
             showSync(true);
-            // 本地備份
             localStorage.setItem('ds_categories', JSON.stringify(state.categories));
             localStorage.setItem('ds_tasks', JSON.stringify(state.tasks));
             localStorage.setItem('ds_completions', JSON.stringify(state.completions));
 
-            // 雲端同步
             if (currentUser) {
-                const { error } = await supabase
+                const { error } = await supabaseClient
                     .from('redopa_data')
-                    .upsert({ 
-                        username: currentUser, 
-                        state_json: state 
-                    }, { onConflict: 'username' });
+                    .upsert({ username: currentUser, state_json: state }, { onConflict: 'username' });
                 if (error) console.error("同步失敗:", error);
             }
             showSync(false);
@@ -192,7 +181,6 @@
                 const target = document.getElementById(`view-${view}`);
                 target.style.display = 'block';
                 gsap.fromTo(target, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 });
-                
                 document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
                 document.getElementById(`nav-${view}`).classList.add('active');
 
@@ -202,7 +190,7 @@
             }, 250);
         }
 
-        // --- [5. 核心計算與功能] ---
+        // --- [5. 核心計算] ---
         function calculateDailyScore(dateStr) {
             const doneIds = state.completions[dateStr] || [];
             return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
@@ -232,7 +220,7 @@
             saveState(); renderHome();
         }
 
-        // --- [6. 設定管理] ---
+        // --- [6. 管理功能] ---
         function addCategory() {
             const val = document.getElementById('new-cat-input').value.trim();
             if (val && !state.categories.includes(val)) {
@@ -270,7 +258,7 @@
             if (confirm("這將清除所有數據，確定嗎？")) { localStorage.clear(); location.reload(); }
         }
 
-        // --- [7. 圖表功能] ---
+        // --- [7. 圖表渲染] ---
         function changeRange(range) {
             currentChartRange = range;
             document.querySelectorAll('.btn-toggle').forEach(btn => btn.classList.remove('active'));
@@ -279,9 +267,10 @@
         }
 
         function renderChart(range) {
-            const ctx = document.getElementById('growthChart').getContext('2d');
+            const canvas = document.getElementById('growthChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
             let labels = []; let scores = [];
-
             if (range === 'month') {
                 for (let i = 29; i >= 0; i--) {
                     const d = new Date(); d.setDate(d.getDate() - i);
@@ -306,7 +295,6 @@
                     }
                 }
             }
-
             if (growthChart) growthChart.destroy();
             growthChart = new Chart(ctx, {
                 type: 'line',
@@ -315,25 +303,21 @@
                     datasets: [{
                         label: '得分', data: scores,
                         borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        borderWidth: 2, tension: 0.3, fill: true, pointRadius: range === 'month' ? 2 : 4
+                        borderWidth: 2, tension: 0.3, fill: true, pointRadius: 2
                     }]
                 },
-                options: { 
-                    responsive: true, plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' } }, x: { grid: { display: false } } }
-                }
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' } }, x: { grid: { display: false } } } }
             });
         }
 
-        // --- [8. 渲染函數] ---
+        // --- [8. UI 渲染] ---
         function renderHome() {
             const statsContainer = document.getElementById('stats-dashboard');
             const questContainer = document.getElementById('quest-container');
             const doneIds = state.completions[today] || [];
             
             statsContainer.innerHTML = state.categories.map(cat => {
-                const catScore = state.tasks.filter(t => t.category === cat)
-                                            .reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
+                const catScore = state.tasks.filter(t => t.category === cat).reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
                 const isActive = currentFilter === cat ? 'border-emerald-500 bg-emerald-500/10' : 'border-transparent';
                 return `<div onclick="setFilter('${cat}')" class="glass-card px-4 py-2 rounded-xl border ${isActive} cursor-pointer transition-all hover:scale-105">
                             <div class="text-[10px] text-slate-500 uppercase">${cat}</div>
@@ -352,19 +336,19 @@
                         <div class="space-y-2">${catTasks.map(t => `
                             <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer">
                                 <input type="checkbox" class="w-5 h-5 accent-emerald-500" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
-                                <span class="flex-1">${t.name}</span><span class="text-emerald-400 font-mono">+${t.score}</span>
+                                <span class="flex-1">${t.name}</span><span class="text-emerald-400 font-mono text-sm">+${t.score}</span>
                             </label>`).join('')}</div></div>`;
             }).join('');
 
-            const todayScore = calculateDailyScore(today);
-            gsap.to("#total-score", { innerHTML: todayScore, duration: 0.5, snap: { innerHTML: 1 } });
-            updateInsight(todayScore);
+            const scoreToday = calculateDailyScore(today);
+            gsap.to("#total-score", { innerHTML: scoreToday, duration: 0.5, snap: { innerHTML: 1 } });
+            updateInsight(scoreToday);
         }
 
         function renderHistory() {
             const tbody = document.getElementById('history-table-body');
             const dates = Object.keys(state.completions).sort().reverse();
-            if (dates.length === 0) { tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-slate-500">尚無歷史數據</td></tr>`; return; }
+            if (dates.length === 0) { tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-slate-500">尚無數據</td></tr>`; return; }
             tbody.innerHTML = dates.map(date => {
                 const doneIds = state.completions[date] || [];
                 return `<tr class="border-t border-slate-700 hover:bg-slate-800/30">
@@ -381,21 +365,19 @@
                 </div>`).join('');
             document.getElementById('task-cat-select').innerHTML = `<option value="">選擇分類...</option>` + state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
             document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `
-                <li class="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg text-sm mb-2">
+                <li class="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg text-sm mb-2 transition-all hover:bg-slate-800">
                     <div><span class="text-xs text-emerald-500 font-mono">[${t.category}]</span><span class="ml-2">${t.name}</span></div>
-                    <div class="flex items-center gap-4"><span class="font-bold text-emerald-400">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-500">✕</button></div>
+                    <div class="flex items-center gap-4"><span class="font-bold text-emerald-400">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-500 hover:text-red-400">✕</button></div>
                 </li>`).join('');
         }
 
-        // --- [9. 系統啟動引導] ---
+        // --- [9. 系統啟動] ---
         async function bootstrap() {
             if (!currentUser) {
                 currentUser = prompt("歡迎來到 ReDopa！請輸入你的使用者名稱以進行同步：");
                 if (currentUser) localStorage.setItem('redopa_user', currentUser);
             }
-            // 嘗試載入雲端資料
             await loadStateFromServer();
-            // 初始渲染
             renderHome();
         }
 
