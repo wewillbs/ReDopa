@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
-        /* 基礎滾動與背景樣式 */
+        /* --- [基礎樣式與滾動設定] --- */
         body { 
             background-color: #0a0a0a; 
             color: #f5f5f5; 
@@ -26,34 +26,40 @@
             overscroll-behavior-y: auto; 
         }
 
-        /* 磨砂玻璃質感卡片 */
+        /* 磨砂玻璃質感 */
         .glass-card { 
             background: rgba(23, 23, 23, 0.7); 
             backdrop-filter: blur(10px); 
             border: 1px solid rgba(255, 255, 255, 0.05); 
         }
 
-        /* 視圖切換區塊高度與填充 */
+        /* --- [佈局與 RWD 控制] --- */
+        /* 視圖區塊：動態計算頂部距離，避開手機瀏海 (Safe Area) */
         .view-section { 
             display: none; 
             position: absolute; 
             width: 100%; 
             left: 0;
-            top: 80px; 
-            padding-bottom: 100px;
+            top: calc(80px + env(safe-area-inset-top)); 
+            padding-bottom: 120px;
         }
 
         .active-view { 
             display: block; 
         }
 
-        /* 導覽列連結樣式 */
+        /* 導覽列 RWD 與安全區域修正 */
+        nav {
+            padding-top: env(safe-area-inset-top);
+            height: calc(64px + env(safe-area-inset-top)) !important;
+        }
+
+        /* --- [元件樣式] --- */
         .nav-link.active { 
             color: #ffffff; 
             border-bottom: 2px solid #ffffff; 
         }
 
-        /* 歷史圖表按鈕樣式 */
         .btn-toggle { 
             background: rgba(38, 38, 38, 0.8); 
             border: 1px solid rgba(255, 255, 255, 0.1); 
@@ -66,10 +72,10 @@
             border-color: #ffffff; 
         }
 
-        /* 同步狀態指示器 */
+        /* 同步提示：避開底部手勢列 */
         #sync-indicator { 
             position: fixed; 
-            bottom: 20px; 
+            bottom: calc(20px + env(safe-area-inset-bottom)); 
             right: 20px; 
             font-size: 10px; 
             color: #ffffff; 
@@ -78,7 +84,7 @@
             z-index: 100; 
         }
         
-        /* 全螢幕加載畫面 */
+        /* 加載畫面 */
         #loading-screen {
             position: fixed;
             inset: 0;
@@ -91,10 +97,10 @@
             transition: opacity 0.6s ease-out;
         }
 
-        /* 下拉重新整理指示器樣式 */
+        /* 下拉指示器：動態對齊導覽列 */
         #ptr-indicator {
             position: fixed;
-            top: 64px; 
+            top: calc(64px + env(safe-area-inset-top)); 
             left: 0;
             width: 100%;
             height: 40px;
@@ -132,7 +138,7 @@
 
     <div id="sync-indicator" class="glass-card px-3 py-1 rounded-full border-white/20">☁️ Syncing</div>
 
-    <nav class="fixed top-0 left-0 w-full h-16 glass-card z-50 border-b border-white/5 px-4">
+    <nav class="fixed top-0 left-0 w-full glass-card z-50 border-b border-white/5 px-4">
         <div class="max-w-2xl mx-auto h-full flex items-center justify-between">
             <div onclick="location.reload()" class="flex items-center gap-2 cursor-pointer group active:scale-95 transition-transform">
                 <img src="icon.png" alt="Logo" class="w-6 h-6 rounded-md grayscale group-hover:grayscale-0 transition-all border border-white/10">
@@ -230,12 +236,12 @@
     </main>
 
     <script>
-        // --- [Supabase 初始化] ---
+        // --- [1. 初始化 Supabase] ---
         const supabaseUrl = 'https://okesrvqivpqvahmenafx.supabase.co';
         const supabaseKey = 'sb_publishable_QCthF4rOOZH0XUb4KQXUtA_I2LZM1JJ';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- [全域狀態] ---
+        // --- [2. 狀態變數] ---
         let state = {
             categories: JSON.parse(localStorage.getItem('ds_categories')) || ['一般'],
             tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
@@ -247,7 +253,7 @@
         let currentChartRange = 'month';
         let currentFilter = null;
 
-        // --- [下拉重新整理邏輯] ---
+        // --- [3. 並行下拉重整邏輯] ---
         let startY = 0, pullDiff = 0;
         const ptrThreshold = 110;
 
@@ -297,7 +303,7 @@
             pullDiff = 0;
         });
 
-        // --- [雲端資料同步] ---
+        // --- [4. 核心同步功能] ---
         async function loadStateFromServer() {
             if (!currentUser) return;
             showSync(true);
@@ -312,7 +318,7 @@
                     state = data.state_json;
                 }
             } catch (err) { 
-                console.log("Cloud sync bypassed."); 
+                console.log("Offline mode or sync error."); 
             }
             showSync(false);
         }
@@ -339,7 +345,7 @@
             if(el) el.style.opacity = isVisible ? 1 : 0; 
         }
 
-        // --- [視圖導覽切換] ---
+        // --- [5. 視圖與導覽控制] ---
         function switchView(view) {
             const sections = ['view-home', 'view-settings', 'view-history'];
             sections.forEach(s => { 
@@ -368,7 +374,7 @@
             }, 250);
         }
 
-        // --- [核心數據計算] ---
+        // --- [6. 數據計算邏輯] ---
         function calculateDailyScore(dateStr) { 
             const doneIds = state.completions[dateStr] || []; 
             return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0); 
@@ -385,7 +391,7 @@
             renderHome(); 
         }
 
-        // --- [UI 渲染：主頁與任務] ---
+        // --- [7. UI 渲染：主頁面與任務列表] ---
         function renderHome() {
             const statsContainer = document.getElementById('stats-dashboard');
             const questContainer = document.getElementById('quest-container');
@@ -393,7 +399,7 @@
 
             const doneIds = state.completions[today] || [];
             
-            // 渲染能力值看板
+            // 渲染類別卡片
             statsContainer.innerHTML = state.categories.map(cat => {
                 const catScore = state.tasks
                     .filter(t => t.category === cat)
@@ -409,7 +415,7 @@
             document.getElementById('clear-filter').style.display = currentFilter ? 'block' : 'none';
             const displayCats = currentFilter ? [currentFilter] : state.categories;
 
-            // 渲染分類任務
+            // 渲染任務列表
             questContainer.innerHTML = displayCats.map(cat => {
                 const catTasks = state.tasks.filter(t => t.category === cat);
                 if (catTasks.length === 0) return '';
@@ -418,8 +424,8 @@
                         <h3 class="text-[10px] text-neutral-500 mb-2 uppercase tracking-[0.2em] pl-2 border-l border-white/20">${cat}</h3>
                         <div class="space-y-2">
                             ${catTasks.map(t => `
-                                <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer">
-                                    <input type="checkbox" class="w-5 h-5 accent-white" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
+                                <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer transition-colors">
+                                    <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
                                     <span class="flex-1 ${doneIds.includes(t.id) ? 'line-through text-neutral-600' : ''}">${t.name}</span>
                                     <span class="text-white font-mono text-sm">${t.score}</span>
                                 </label>`).join('')}
@@ -434,7 +440,7 @@
             });
         }
 
-        // --- [UI 渲染：歷史圖表] ---
+        // --- [8. 歷史圖表渲染] ---
         function renderChart(range) {
             const canvas = document.getElementById('growthChart');
             if(!canvas) return;
@@ -495,7 +501,7 @@
             });
         }
 
-        // --- [資料庫與管理操作] ---
+        // --- [9. 管理功能與任務操作] ---
         function toggleTask(id) { 
             if (!state.completions[today]) state.completions[today] = []; 
             const idx = state.completions[today].indexOf(id); 
@@ -536,7 +542,7 @@
 
         function deleteCategory(catName) { 
             if (catName === '一般') return alert("不可刪除預設"); 
-            if (confirm(`確定刪除「${catName}」？`)) { 
+            if (confirm(`確定刪除「${catName}」？相關任務將歸類至「一般」。`)) { 
                 state.categories = state.categories.filter(c => c !== catName); 
                 state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); 
                 saveState(); 
@@ -545,7 +551,7 @@
         }
 
         function resetAll() { 
-            if (confirm("確定重置數據？")) { 
+            if (confirm("這將清除所有資料，確定重置嗎？")) { 
                 localStorage.clear(); 
                 location.reload(); 
             } 
@@ -571,7 +577,7 @@
                     <td class="p-4 font-mono text-neutral-500">${d}</td>
                     <td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td>
                     <td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td>
-                </tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; 
+                </tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records found.</td></tr>'; 
         }
 
         function changeRange(range) { 
@@ -581,7 +587,7 @@
             renderChart(range); 
         }
 
-        // --- [系統啟動流程：GSAP 驅動] ---
+        // --- [10. 系統啟動引導流程] ---
         async function bootstrap() {
             const bar = document.getElementById('loading-bar');
             
@@ -589,7 +595,7 @@
             gsap.to(bar, { width: '30%', duration: 0.8, ease: "power2.out" });
 
             if (!currentUser) {
-                currentUser = prompt("IDENTITY REQUIRED:");
+                currentUser = prompt("IDENTITY REQUIRED. PLEASE ENTER USERNAME:");
                 if (currentUser) {
                     localStorage.setItem('redopa_user', currentUser);
                 } else { 
@@ -601,7 +607,7 @@
             // 階段二：驗證成功 (60%)
             gsap.to(bar, { width: '60%', duration: 0.5, ease: "power2.out" });
 
-            // 執行雲端抓取
+            // 從 Supabase 下載資料
             await loadStateFromServer();
 
             // 階段三：完成 (100%)
