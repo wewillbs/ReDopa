@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
-        /* 基礎樣式 */
+        /* 基礎滾動與背景樣式 */
         body { 
             background-color: #0a0a0a; 
             color: #f5f5f5; 
@@ -26,14 +26,14 @@
             overscroll-behavior-y: auto; 
         }
 
-        /* 磨砂玻璃效果 */
+        /* 磨砂玻璃質感卡片 */
         .glass-card { 
             background: rgba(23, 23, 23, 0.7); 
             backdrop-filter: blur(10px); 
             border: 1px solid rgba(255, 255, 255, 0.05); 
         }
 
-        /* 頁面區塊 */
+        /* 視圖切換區塊高度與填充 */
         .view-section { 
             display: none; 
             position: absolute; 
@@ -47,13 +47,13 @@
             display: block; 
         }
 
-        /* 導覽連結 */
+        /* 導覽列連結樣式 */
         .nav-link.active { 
             color: #ffffff; 
             border-bottom: 2px solid #ffffff; 
         }
 
-        /* 切換按鈕 */
+        /* 歷史圖表按鈕樣式 */
         .btn-toggle { 
             background: rgba(38, 38, 38, 0.8); 
             border: 1px solid rgba(255, 255, 255, 0.1); 
@@ -66,7 +66,7 @@
             border-color: #ffffff; 
         }
 
-        /* 同步提示 */
+        /* 同步狀態指示器 */
         #sync-indicator { 
             position: fixed; 
             bottom: 20px; 
@@ -78,7 +78,7 @@
             z-index: 100; 
         }
         
-        /* 加載畫面 */
+        /* 全螢幕加載畫面 */
         #loading-screen {
             position: fixed;
             inset: 0;
@@ -91,7 +91,7 @@
             transition: opacity 0.6s ease-out;
         }
 
-        /* 下拉指示器 */
+        /* 下拉重新整理指示器樣式 */
         #ptr-indicator {
             position: fixed;
             top: 64px; 
@@ -178,12 +178,18 @@
                         <button onclick="changeRange('all')" id="btn-all" class="btn-toggle text-[10px] px-3 py-1 rounded-full">ALL</button>
                     </div>
                 </div>
-                <canvas id="growthChart" height="180"></canvas>
+                <div class="h-[200px]">
+                    <canvas id="growthChart"></canvas>
+                </div>
             </div>
             <div class="glass-card rounded-2xl overflow-hidden border border-white/5">
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-neutral-900 text-neutral-400 text-xs uppercase tracking-wider">
-                        <tr><th class="p-4">日期</th><th class="p-4 text-center">得分</th><th class="p-4">完成度</th></tr>
+                        <tr>
+                            <th class="p-4">日期</th>
+                            <th class="p-4 text-center">得分</th>
+                            <th class="p-4">完成度</th>
+                        </tr>
                     </thead>
                     <tbody id="history-table-body" class="text-sm"></tbody>
                 </table>
@@ -229,7 +235,7 @@
         const supabaseKey = 'sb_publishable_QCthF4rOOZH0XUb4KQXUtA_I2LZM1JJ';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- [狀態管理] ---
+        // --- [全域狀態] ---
         let state = {
             categories: JSON.parse(localStorage.getItem('ds_categories')) || ['一般'],
             tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
@@ -237,41 +243,77 @@
         };
         const today = new Date().toISOString().split('T')[0];
         let currentUser = localStorage.getItem('redopa_user');
-        let growthChart = null, currentChartRange = 'month', currentFilter = null;
+        let growthChart = null;
+        let currentChartRange = 'month';
+        let currentFilter = null;
 
-        // --- [下拉重整邏輯] ---
+        // --- [下拉重新整理邏輯] ---
         let startY = 0, pullDiff = 0;
         const ptrThreshold = 110;
-        window.addEventListener('touchstart', (e) => { if (window.scrollY <= 0) { startY = e.touches[0].pageY; pullDiff = 0; } }, { passive: true });
+
+        window.addEventListener('touchstart', (e) => { 
+            if (window.scrollY <= 0) { 
+                startY = e.touches[0].pageY; 
+                pullDiff = 0; 
+            } 
+        }, { passive: true });
+
         window.addEventListener('touchmove', (e) => {
             if (window.scrollY > 0) return;
             const currentY = e.touches[0].pageY;
             pullDiff = currentY - startY;
+
             if (pullDiff > 20) {
                 const move = Math.min(pullDiff * 0.3, 50);
-                gsap.set('#ptr-indicator', { y: move, opacity: pullDiff/ptrThreshold });
+                gsap.set('#ptr-indicator', { 
+                    y: move, 
+                    opacity: pullDiff / ptrThreshold 
+                });
                 document.getElementById('ptr-icon').innerText = pullDiff >= ptrThreshold ? "Release to sync" : "Pull to sync";
             }
         }, { passive: true });
+
         window.addEventListener('touchend', (e) => {
             if (window.scrollY <= 0 && pullDiff >= ptrThreshold) {
-                gsap.to('#ptr-indicator', { y: 0, opacity: 0, duration: 0.2, onComplete: () => {
-                    document.getElementById('loading-screen').style.display = 'flex'; 
-                    document.getElementById('loading-screen').style.opacity = '1';
-                    location.reload();
-                }});
-            } else { gsap.to('#ptr-indicator', { y: -20, opacity: 0, duration: 0.3, ease: "power2.out" }); }
+                gsap.to('#ptr-indicator', { 
+                    y: 0, 
+                    opacity: 0, 
+                    duration: 0.2, 
+                    onComplete: () => {
+                        const screen = document.getElementById('loading-screen');
+                        screen.style.display = 'flex'; 
+                        screen.style.opacity = '1';
+                        location.reload();
+                    }
+                });
+            } else { 
+                gsap.to('#ptr-indicator', { 
+                    y: -20, 
+                    opacity: 0, 
+                    duration: 0.3, 
+                    ease: "power2.out" 
+                }); 
+            }
             pullDiff = 0;
         });
 
-        // --- [核心同步] ---
+        // --- [雲端資料同步] ---
         async function loadStateFromServer() {
             if (!currentUser) return;
             showSync(true);
             try {
-                const { data } = await supabaseClient.from('redopa_data').select('state_json').eq('username', currentUser).single();
-                if (data?.state_json) state = data.state_json;
-            } catch (err) { console.log("Offline mode."); }
+                const { data } = await supabaseClient
+                    .from('redopa_data')
+                    .select('state_json')
+                    .eq('username', currentUser)
+                    .single();
+
+                if (data && data.state_json) {
+                    state = data.state_json;
+                }
+            } catch (err) { 
+                console.log("Cloud sync bypassed."); 
+            }
             showSync(false);
         }
 
@@ -280,111 +322,289 @@
             localStorage.setItem('ds_categories', JSON.stringify(state.categories));
             localStorage.setItem('ds_tasks', JSON.stringify(state.tasks));
             localStorage.setItem('ds_completions', JSON.stringify(state.completions));
-            if (currentUser) await supabaseClient.from('redopa_data').upsert({ username: currentUser, state_json: state }, { onConflict: 'username' });
+
+            if (currentUser) {
+                await supabaseClient
+                    .from('redopa_data')
+                    .upsert({ 
+                        username: currentUser, 
+                        state_json: state 
+                    }, { onConflict: 'username' });
+            }
             showSync(false);
         }
 
-        function showSync(isVisible) { const el = document.getElementById('sync-indicator'); if(el) el.style.opacity = isVisible ? 1 : 0; }
+        function showSync(isVisible) { 
+            const el = document.getElementById('sync-indicator'); 
+            if(el) el.style.opacity = isVisible ? 1 : 0; 
+        }
 
-        // --- [視圖切換] ---
+        // --- [視圖導覽切換] ---
         function switchView(view) {
             const sections = ['view-home', 'view-settings', 'view-history'];
-            sections.forEach(s => { const el = document.getElementById(s); if (el && el.style.display !== 'none') gsap.to(el, { opacity: 0, y: 10, duration: 0.2, onComplete: () => el.style.display = 'none' }); });
+            sections.forEach(s => { 
+                const el = document.getElementById(s); 
+                if (el && el.style.display !== 'none') {
+                    gsap.to(el, { opacity: 0, y: 10, duration: 0.2, onComplete: () => el.style.display = 'none' }); 
+                }
+            });
+
             setTimeout(() => {
                 const target = document.getElementById(`view-${view}`);
-                if(target) { target.style.display = 'block'; gsap.fromTo(target, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 }); }
+                if(target) { 
+                    target.style.display = 'block'; 
+                    gsap.fromTo(target, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 }); 
+                }
                 document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
                 const navBtn = document.getElementById(`nav-${view}`);
                 if(navBtn) navBtn.classList.add('active');
+
                 if (view === 'home') renderHome();
                 if (view === 'settings') renderSettings();
-                if (view === 'history') { renderHistory(); renderChart(currentChartRange); }
+                if (view === 'history') { 
+                    renderHistory(); 
+                    renderChart(currentChartRange); 
+                }
             }, 250);
         }
 
-        // --- [邏輯計算] ---
+        // --- [核心數據計算] ---
         function calculateDailyScore(dateStr) { 
             const doneIds = state.completions[dateStr] || []; 
             return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0); 
         }
 
         function calculateMonthlyScore(yearMonth) { 
-            return Object.keys(state.completions).filter(d => d.startsWith(yearMonth)).reduce((t, d) => t + calculateDailyScore(d), 0); 
+            return Object.keys(state.completions)
+                .filter(d => d.startsWith(yearMonth))
+                .reduce((t, d) => t + calculateDailyScore(d), 0); 
         }
 
-        function setFilter(cat) { currentFilter = cat; renderHome(); }
+        function setFilter(cat) { 
+            currentFilter = cat; 
+            renderHome(); 
+        }
 
-        // --- [UI 渲染] ---
+        // --- [UI 渲染：主頁與任務] ---
         function renderHome() {
             const statsContainer = document.getElementById('stats-dashboard');
             const questContainer = document.getElementById('quest-container');
             if(!statsContainer || !questContainer) return;
+
             const doneIds = state.completions[today] || [];
             
+            // 渲染能力值看板
             statsContainer.innerHTML = state.categories.map(cat => {
-                const catScore = state.tasks.filter(t => t.category === cat).reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
+                const catScore = state.tasks
+                    .filter(t => t.category === cat)
+                    .reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
                 const isActive = currentFilter === cat ? 'border-white bg-white/10' : 'border-white/5';
-                return `<div onclick="setFilter('${cat}')" class="glass-card px-4 py-2 rounded-xl border ${isActive} cursor-pointer transition-all hover:scale-105 min-w-[80px]">
-                            <div class="text-[10px] text-neutral-500 uppercase font-bold text-center">${cat}</div>
-                            <div class="text-xl font-bold text-white text-center">${catScore}</div>
-                        </div>`;
+                return `
+                    <div onclick="setFilter('${cat}')" class="glass-card px-4 py-2 rounded-xl border ${isActive} cursor-pointer transition-all hover:scale-105 min-w-[80px]">
+                        <div class="text-[10px] text-neutral-500 uppercase font-bold text-center">${cat}</div>
+                        <div class="text-xl font-bold text-white text-center">${catScore}</div>
+                    </div>`;
             }).join('');
 
             document.getElementById('clear-filter').style.display = currentFilter ? 'block' : 'none';
             const displayCats = currentFilter ? [currentFilter] : state.categories;
+
+            // 渲染分類任務
             questContainer.innerHTML = displayCats.map(cat => {
                 const catTasks = state.tasks.filter(t => t.category === cat);
                 if (catTasks.length === 0) return '';
-                return `<div class="mb-6"><h3 class="text-[10px] text-neutral-500 mb-2 uppercase tracking-[0.2em] pl-2 border-l border-white/20">${cat}</h3>
-                        <div class="space-y-2">${catTasks.map(t => `
-                            <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer hover:bg-neutral-900/40">
-                                <input type="checkbox" class="w-5 h-5 accent-white rounded bg-black" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
-                                <span class="flex-1 ${doneIds.includes(t.id) ? 'line-through text-neutral-600' : ''}">${t.name}</span>
-                                <span class="text-white font-mono text-sm">${t.score}</span>
-                            </label>`).join('')}</div></div>`;
+                return `
+                    <div class="mb-6">
+                        <h3 class="text-[10px] text-neutral-500 mb-2 uppercase tracking-[0.2em] pl-2 border-l border-white/20">${cat}</h3>
+                        <div class="space-y-2">
+                            ${catTasks.map(t => `
+                                <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer">
+                                    <input type="checkbox" class="w-5 h-5 accent-white" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
+                                    <span class="flex-1 ${doneIds.includes(t.id) ? 'line-through text-neutral-600' : ''}">${t.name}</span>
+                                    <span class="text-white font-mono text-sm">${t.score}</span>
+                                </label>`).join('')}
+                        </div>
+                    </div>`;
             }).join('');
-            gsap.to("#total-score", { innerHTML: calculateDailyScore(today), duration: 0.5, snap: { innerHTML: 1 } });
-        }
 
-        function renderChart(range) {
-            const ctx = document.getElementById('growthChart').getContext('2d');
-            let labels = [], scores = [];
-            if (range === 'month') { for (let i = 29; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const ds = d.toISOString().split('T')[0]; labels.push(ds.slice(5)); scores.push(calculateDailyScore(ds)); } }
-            else if (range === 'year') { for (let i = 11; i >= 0; i--) { const d = new Date(); d.setMonth(d.getMonth() - i); const ym = d.toISOString().slice(0, 7); labels.push(ym); scores.push(calculateMonthlyScore(ym)); } }
-            else if (range === 'all') { const dates = Object.keys(state.completions).sort(); if(dates.length) { let curr = new Date(dates[0].slice(0, 7)); while(curr <= new Date()) { labels.push(curr.toISOString().slice(0, 7)); scores.push(calculateMonthlyScore(curr.toISOString().slice(0, 7))); curr.setMonth(curr.setMonth() + 1); } } }
-            if (growthChart) growthChart.destroy();
-            growthChart = new Chart(ctx, {
-                type: 'line',
-                data: { labels, datasets: [{ data: scores, borderColor: '#ffffff', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 1.5, tension: 0.3, fill: true, pointRadius: range==='month'?0:3 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#525252' } }, x: { grid: { display: false }, ticks: { color: '#525252' } } } }
+            gsap.to("#total-score", { 
+                innerHTML: calculateDailyScore(today), 
+                duration: 0.5, 
+                snap: { innerHTML: 1 } 
             });
         }
 
-        // --- [管理功能] ---
-        function toggleTask(id) { if (!state.completions[today]) state.completions[today] = []; const idx = state.completions[today].indexOf(id); if (idx > -1) state.completions[today].splice(idx, 1); else state.completions[today].push(id); saveState(); renderHome(); }
-        function addCategory() { const val = document.getElementById('new-cat-input').value.trim(); if (val && !state.categories.includes(val)) { state.categories.push(val); saveState(); renderSettings(); document.getElementById('new-cat-input').value = ''; } }
-        function deleteTask(id) { state.tasks = state.tasks.filter(t => t.id !== id); saveState(); renderSettings(); }
-        function addTask() { 
-            const name = document.getElementById('task-name').value.trim(), cat = document.getElementById('task-cat-select').value, score = parseInt(document.getElementById('task-score').value) || 0; 
-            if (name && cat) { state.tasks.push({ id: Date.now(), name, category: cat, score }); saveState(); renderSettings(); document.getElementById('task-name').value = ''; document.getElementById('task-score').value = ''; } 
-        }
-        function resetAll() { if (confirm("確定重置數據？")) { localStorage.clear(); location.reload(); } }
-        function renderSettings() {
-            document.getElementById('cat-tags').innerHTML = state.categories.map(c => `<div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2"># ${c}<button onclick="deleteCategory('${c}')">✕</button></div>`).join('');
-            document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
-            document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `<li class="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg text-sm border border-white/5"><div class="flex items-center gap-2"><span class="text-[10px] text-neutral-500">[${t.category}]</span>${t.name}</div><div class="flex items-center gap-4"><span class="font-bold text-white">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-900">✕</button></div></li>`).join('');
-        }
-        function deleteCategory(catName) { if (catName === '一般') return alert("不可刪除預設"); if (confirm(`確定刪除「${catName}」？`)) { state.categories = state.categories.filter(c => c !== catName); state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); saveState(); renderSettings(); } }
-        function renderHistory() { const dates = Object.keys(state.completions).sort().reverse(); document.getElementById('history-table-body').innerHTML = dates.map(d => `<tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors"><td class="p-4 font-mono text-neutral-500">${d}</td><td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td><td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td></tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; }
-        function changeRange(range) { currentChartRange = range; document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); document.getElementById(`btn-${range}`).classList.add('active'); renderChart(range); }
+        // --- [UI 渲染：歷史圖表] ---
+        function renderChart(range) {
+            const canvas = document.getElementById('growthChart');
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let labels = [], scores = [];
 
-        // --- [系統啟動] ---
+            if (range === 'month') { 
+                for (let i = 29; i >= 0; i--) { 
+                    const d = new Date(); d.setDate(d.getDate() - i); 
+                    const ds = d.toISOString().split('T')[0]; 
+                    labels.push(ds.slice(5)); 
+                    scores.push(calculateDailyScore(ds)); 
+                } 
+            } else if (range === 'year') { 
+                for (let i = 11; i >= 0; i--) { 
+                    const d = new Date(); d.setMonth(d.getMonth() - i); 
+                    const ym = d.toISOString().slice(0, 7); 
+                    labels.push(ym); 
+                    scores.push(calculateMonthlyScore(ym)); 
+                } 
+            } else if (range === 'all') { 
+                const dates = Object.keys(state.completions).sort(); 
+                if(dates.length) { 
+                    let curr = new Date(dates[0].slice(0, 7)); 
+                    while(curr <= new Date()) { 
+                        const ym = curr.toISOString().slice(0, 7); 
+                        labels.push(ym); 
+                        scores.push(calculateMonthlyScore(ym)); 
+                        curr.setMonth(curr.setMonth() + 1); 
+                    } 
+                } 
+            }
+
+            if (growthChart) growthChart.destroy();
+            growthChart = new Chart(ctx, {
+                type: 'line',
+                data: { 
+                    labels, 
+                    datasets: [{ 
+                        data: scores, 
+                        borderColor: '#ffffff', 
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)', 
+                        borderWidth: 1.5, 
+                        tension: 0.3, 
+                        fill: true, 
+                        pointRadius: range === 'month' ? 0 : 3 
+                    }] 
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }, 
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.03)' }, ticks: { color: '#525252' } }, 
+                        x: { grid: { display: false }, ticks: { color: '#525252' } } 
+                    } 
+                }
+            });
+        }
+
+        // --- [資料庫與管理操作] ---
+        function toggleTask(id) { 
+            if (!state.completions[today]) state.completions[today] = []; 
+            const idx = state.completions[today].indexOf(id); 
+            if (idx > -1) state.completions[today].splice(idx, 1); 
+            else state.completions[today].push(id); 
+            saveState(); 
+            renderHome(); 
+        }
+
+        function addCategory() { 
+            const val = document.getElementById('new-cat-input').value.trim(); 
+            if (val && !state.categories.includes(val)) { 
+                state.categories.push(val); 
+                saveState(); 
+                renderSettings(); 
+                document.getElementById('new-cat-input').value = ''; 
+            } 
+        }
+
+        function addTask() { 
+            const name = document.getElementById('task-name').value.trim();
+            const cat = document.getElementById('task-cat-select').value;
+            const score = parseInt(document.getElementById('task-score').value) || 0; 
+            if (name && cat) { 
+                state.tasks.push({ id: Date.now(), name, category: cat, score }); 
+                saveState(); 
+                renderSettings(); 
+                document.getElementById('task-name').value = ''; 
+                document.getElementById('task-score').value = ''; 
+            } 
+        }
+
+        function deleteTask(id) { 
+            state.tasks = state.tasks.filter(t => t.id !== id); 
+            saveState(); 
+            renderSettings(); 
+        }
+
+        function deleteCategory(catName) { 
+            if (catName === '一般') return alert("不可刪除預設"); 
+            if (confirm(`確定刪除「${catName}」？`)) { 
+                state.categories = state.categories.filter(c => c !== catName); 
+                state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '一般'} : t); 
+                saveState(); 
+                renderSettings(); 
+            } 
+        }
+
+        function resetAll() { 
+            if (confirm("確定重置數據？")) { 
+                localStorage.clear(); 
+                location.reload(); 
+            } 
+        }
+
+        function renderSettings() {
+            document.getElementById('cat-tags').innerHTML = state.categories.map(c => `
+                <div class="bg-neutral-900 border border-white/10 px-3 py-1 rounded-full text-xs text-neutral-300 flex items-center gap-2">
+                    # ${c}<button onclick="deleteCategory('${c}')">✕</button>
+                </div>`).join('');
+            document.getElementById('task-cat-select').innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `
+                <li class="flex justify-between items-center bg-neutral-900/50 p-3 rounded-lg text-sm border border-white/5">
+                    <div class="flex items-center gap-2"><span class="text-[10px] text-neutral-500">[${t.category}]</span>${t.name}</div>
+                    <div class="flex items-center gap-4"><span class="font-bold text-white">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-900">✕</button></div>
+                </li>`).join('');
+        }
+
+        function renderHistory() { 
+            const dates = Object.keys(state.completions).sort().reverse(); 
+            document.getElementById('history-table-body').innerHTML = dates.map(d => `
+                <tr class="border-t border-white/5 hover:bg-neutral-900/50 transition-colors">
+                    <td class="p-4 font-mono text-neutral-500">${d}</td>
+                    <td class="p-4 text-center font-bold text-white">${calculateDailyScore(d)}</td>
+                    <td class="p-4 text-neutral-400 text-xs">${(state.completions[d] || []).length} Missions</td>
+                </tr>`).join('') || '<tr><td colspan="3" class="p-8 text-center text-neutral-600 italic">No records.</td></tr>'; 
+        }
+
+        function changeRange(range) { 
+            currentChartRange = range; 
+            document.querySelectorAll('.btn-toggle').forEach(b => b.classList.remove('active')); 
+            document.getElementById(`btn-${range}`).classList.add('active'); 
+            renderChart(range); 
+        }
+
+        // --- [系統啟動流程：GSAP 驅動] ---
         async function bootstrap() {
             const bar = document.getElementById('loading-bar');
+            
+            // 階段一：啟動 (30%)
             gsap.to(bar, { width: '30%', duration: 0.8, ease: "power2.out" });
-            if (!currentUser) { currentUser = prompt("IDENTITY REQUIRED:"); if (currentUser) localStorage.setItem('redopa_user', currentUser); else { document.getElementById('loading-screen').style.display='none'; return; } }
+
+            if (!currentUser) {
+                currentUser = prompt("IDENTITY REQUIRED:");
+                if (currentUser) {
+                    localStorage.setItem('redopa_user', currentUser);
+                } else { 
+                    document.getElementById('loading-screen').style.display='none'; 
+                    return; 
+                }
+            }
+
+            // 階段二：驗證成功 (60%)
             gsap.to(bar, { width: '60%', duration: 0.5, ease: "power2.out" });
+
+            // 執行雲端抓取
             await loadStateFromServer();
+
+            // 階段三：完成 (100%)
             gsap.to(bar, { 
                 width: '100%', 
                 duration: 0.4, 
@@ -394,12 +614,16 @@
                         const screen = document.getElementById('loading-screen');
                         if(screen) {
                             screen.style.opacity = '0';
-                            setTimeout(() => { screen.style.display = 'none'; renderHome(); }, 600);
+                            setTimeout(() => {
+                                screen.style.display = 'none';
+                                renderHome();
+                            }, 600);
                         }
                     }, 200);
                 }
             });
         }
+
         bootstrap();
     </script>
 </body>
