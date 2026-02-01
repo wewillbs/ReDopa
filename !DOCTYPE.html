@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReDopa - Dopamine Rebuild System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; overflow-x: hidden; }
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .view-section { display: none; position: absolute; width: 100%; top: 80px; }
+        .active-view { display: block; }
+        .nav-link.active { color: #10b981; border-bottom: 2px solid #10b981; }
+        .btn-toggle { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(16, 185, 129, 0.2); transition: all 0.3s; }
+        .btn-toggle.active { background: #10b981; color: #0f172a; border-color: #10b981; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <nav class="fixed top-0 left-0 w-full h-16 glass-card z-50 px-8 flex items-center justify-between">
+        <div class="font-bold text-xl text-emerald-400 tracking-tighter">ReDopa</div>
+        <div class="flex gap-4 md:gap-6">
+            <button onclick="switchView('home')" id="nav-home" class="nav-link active text-sm md:text-base">主頁</button>
+            <button onclick="switchView('history')" id="nav-history" class="nav-link text-sm md:text-base">歷史</button>
+            <button onclick="switchView('settings')" id="nav-settings" class="nav-link text-sm md:text-base">設定</button>
+        </div>
+    </nav>
+
+    <main id="view-home" class="view-section active-view max-w-xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-xs uppercase tracking-widest text-slate-400">Total Reward Today</h1>
+            <div id="total-score" class="text-7xl font-bold text-emerald-400">0</div>
+            <p id="status-insight" class="text-xs text-slate-500 mt-2 italic">"準備好開始今天的重建了嗎？"</p>
+        </header>
+
+        <div id="stats-dashboard" class="flex flex-wrap gap-2 mb-8 justify-center"></div>
+
+        <div class="flex justify-between items-center mb-4">
+            <h2 id="quest-title" class="text-sm font-bold text-slate-400 uppercase tracking-widest pl-2">Quest Log</h2>
+            <button id="clear-filter" onclick="setFilter(null)" class="hidden text-[10px] text-emerald-500 border border-emerald-500/30 px-2 py-1 rounded">顯示全部</button>
+        </div>
+        <div id="quest-container" class="space-y-4"></div>
+    </main>
+
+    <main id="view-history" class="view-section max-w-2xl mx-auto pb-20">
+        <h1 class="text-2xl font-bold mb-6">📅 成長歷史紀錄</h1>
+        
+        <div class="glass-card rounded-2xl p-4 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xs text-slate-400 uppercase tracking-widest">Growth Trend</h2>
+                <div class="flex gap-2">
+                    <button onclick="changeRange('month')" id="btn-month" class="btn-toggle text-[10px] px-3 py-1 rounded-full active">一個月</button>
+                    <button onclick="changeRange('year')" id="btn-year" class="btn-toggle text-[10px] px-3 py-1 rounded-full">一年</button>
+                    <button onclick="changeRange('all')" id="btn-all" class="btn-toggle text-[10px] px-3 py-1 rounded-full">全時期</button>
+                </div>
+            </div>
+            <canvas id="growthChart" height="180"></canvas>
+        </div>
+
+        <div class="glass-card rounded-2xl overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-800/80 text-emerald-400 text-xs uppercase tracking-wider">
+                    <tr>
+                        <th class="p-4">日期</th>
+                        <th class="p-4 text-center">總分數</th>
+                        <th class="p-4">完成項目數</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body" class="text-sm"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <main id="view-settings" class="view-section max-w-xl mx-auto pb-20">
+        <h1 class="text-2xl font-bold mb-8">⚙️ 系統設定中心</h1>
+        
+        <section class="glass-card rounded-2xl p-6 mb-8">
+            <h2 class="text-emerald-400 font-semibold mb-4">1. 分類管理</h2>
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="new-cat-input" placeholder="例如：身體、心智" class="flex-1 bg-slate-800 rounded-lg p-2 outline-none">
+                <button onclick="addCategory()" class="bg-emerald-600 px-4 py-2 rounded-lg text-sm">新增分類</button>
+            </div>
+            <div id="cat-tags" class="flex flex-wrap gap-2"></div>
+        </section>
+
+        <section class="glass-card rounded-2xl p-6 mb-8">
+            <h2 class="text-emerald-400 font-semibold mb-4">2. 任務管理</h2>
+            <div class="space-y-3 mb-6">
+                <input type="text" id="task-name" placeholder="任務名稱" class="w-full bg-slate-800 rounded-lg p-2 outline-none">
+                <div class="flex gap-2">
+                    <select id="task-cat-select" class="flex-1 bg-slate-800 rounded-lg p-2 outline-none"></select>
+                    <input type="number" id="task-score" placeholder="分數" class="w-24 bg-slate-800 rounded-lg p-2 outline-none">
+                </div>
+                <button onclick="addTask()" class="w-full bg-emerald-600 py-2 rounded-lg font-bold">新增至清單</button>
+            </div>
+            <ul id="task-manage-list" class="space-y-2 border-t border-slate-700 pt-4"></ul>
+        </section>
+
+        <section class="glass-card rounded-2xl p-6 border-red-500/30">
+            <h2 class="text-red-400 font-semibold mb-2">3. 危險區域</h2>
+            <button onclick="resetAll()" class="text-red-500 border border-red-500/50 px-4 py-1 rounded hover:bg-red-500/10 transition-all text-sm">重置全部資料</button>
+        </section>
+    </main>
+
+    <script>
+        // --- [狀態管理] ---
+        let state = {
+            categories: JSON.parse(localStorage.getItem('ds_categories')) || ['其他'],
+            tasks: JSON.parse(localStorage.getItem('ds_tasks')) || [],
+            completions: JSON.parse(localStorage.getItem('ds_completions')) || {}
+        };
+
+        const today = new Date().toISOString().split('T')[0];
+        let growthChart = null;
+        let currentChartRange = 'month';
+        let currentFilter = null;
+
+        // --- [視圖切換邏輯] ---
+        function switchView(view) {
+            const sections = ['view-home', 'view-settings', 'view-history'];
+            sections.forEach(s => {
+                const el = document.getElementById(s);
+                if (el.style.display !== 'none') {
+                    gsap.to(el, { opacity: 0, y: 10, duration: 0.2, onComplete: () => el.style.display = 'none' });
+                }
+            });
+
+            setTimeout(() => {
+                const target = document.getElementById(`view-${view}`);
+                target.style.display = 'block';
+                gsap.fromTo(target, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 });
+                
+                document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+                document.getElementById(`nav-${view}`).classList.add('active');
+
+                if (view === 'home') renderHome();
+                if (view === 'settings') renderSettings();
+                if (view === 'history') {
+                    renderHistory();
+                    renderChart(currentChartRange);
+                }
+            }, 250);
+        }
+
+        // --- [計算邏輯] ---
+        function calculateDailyScore(dateStr) {
+            const doneIds = state.completions[dateStr] || [];
+            return state.tasks.reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
+        }
+
+        function calculateMonthlyScore(yearMonth) {
+            return Object.keys(state.completions)
+                .filter(date => date.startsWith(yearMonth))
+                .reduce((total, date) => total + calculateDailyScore(date), 0);
+        }
+
+        function calculateScore() {
+            const total = calculateDailyScore(today);
+            gsap.to("#total-score", { innerHTML: total, duration: 0.5, snap: { innerHTML: 1 } });
+        }
+
+        // --- [圖表功能] ---
+        function changeRange(range) {
+            currentChartRange = range;
+            document.querySelectorAll('.btn-toggle').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-${range}`).classList.add('active');
+            renderChart(range);
+        }
+
+        function renderChart(range) {
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            let labels = [];
+            let scores = [];
+
+            if (range === 'month') {
+                for (let i = 29; i >= 0; i--) {
+                    const d = new Date(); d.setDate(d.getDate() - i);
+                    const ds = d.toISOString().split('T')[0];
+                    labels.push(ds.slice(5)); scores.push(calculateDailyScore(ds));
+                }
+            } else if (range === 'year') {
+                for (let i = 11; i >= 0; i--) {
+                    const d = new Date(); d.setMonth(d.getMonth() - i);
+                    const ym = d.toISOString().slice(0, 7);
+                    labels.push(ym); scores.push(calculateMonthlyScore(ym));
+                }
+            } else if (range === 'all') {
+                const allDates = Object.keys(state.completions).sort();
+                if (allDates.length === 0) { labels = ['N/A']; scores = [0]; }
+                else {
+                    let curr = new Date(new Date(allDates[0]).getFullYear(), new Date(allDates[0]).getMonth(), 1);
+                    while (curr <= new Date()) {
+                        const ym = curr.toISOString().slice(0, 7);
+                        labels.push(ym); scores.push(calculateMonthlyScore(ym));
+                        curr.setMonth(curr.getMonth() + 1);
+                    }
+                }
+            }
+
+            if (growthChart) growthChart.destroy();
+            growthChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '得分', data: scores,
+                        borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2, tension: 0.3, fill: true, pointRadius: range === 'month' ? 2 : 4
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' } }, x: { grid: { display: false } } }
+                }
+            });
+        }
+
+        // --- [主頁功能] ---
+        function setFilter(cat) {
+            currentFilter = cat;
+            renderHome();
+        }
+
+        function updateInsight(score) {
+            const el = document.getElementById('status-insight');
+            let text = score === 0 ? '"等待第一步的跨出..."' : 
+                       score < 50 ? '"正在暖身，保持節奏。"' : 
+                       score < 100 ? '"感覺到了嗎？多巴胺正在正確地流動。"' : '"卓越的掌控力，你正在重建自己。"';
+            el.innerText = text;
+        }
+
+        function toggleTask(id) {
+            if (!state.completions[today]) state.completions[today] = [];
+            const idx = state.completions[today].indexOf(id);
+            if (idx > -1) state.completions[today].splice(idx, 1);
+            else state.completions[today].push(id);
+            saveState(); calculateScore(); renderHome();
+        }
+
+        // --- [設定與管理] ---
+        function addCategory() {
+            const val = document.getElementById('new-cat-input').value.trim();
+            if (val && !state.categories.includes(val)) {
+                state.categories.push(val); saveState(); renderSettings();
+                document.getElementById('new-cat-input').value = '';
+            }
+        }
+
+        function deleteCategory(catName) {
+            if (catName === '其他') return alert("不可刪除預設分類");
+            if (confirm(`確定刪除「${catName}」？相關任務將歸類至「其他」。`)) {
+                state.categories = state.categories.filter(c => c !== catName);
+                state.tasks = state.tasks.map(t => t.category === catName ? {...t, category: '其他'} : t);
+                saveState(); renderSettings();
+            }
+        }
+
+        function addTask() {
+            const name = document.getElementById('task-name').value.trim();
+            const cat = document.getElementById('task-cat-select').value;
+            const score = parseInt(document.getElementById('task-score').value) || 0;
+            if (name && cat) {
+                state.tasks.push({ id: Date.now(), name, category: cat, score });
+                saveState(); renderSettings();
+                document.getElementById('task-name').value = ''; document.getElementById('task-score').value = '';
+            }
+        }
+
+        function deleteTask(id) {
+            state.tasks = state.tasks.filter(t => t.id !== id);
+            saveState(); renderSettings();
+        }
+
+        function resetAll() {
+            if (confirm("這將清除所有數據，確定嗎？")) { localStorage.clear(); location.reload(); }
+        }
+
+        // --- [渲染函數] ---
+        function renderHome() {
+            const statsContainer = document.getElementById('stats-dashboard');
+            const questContainer = document.getElementById('quest-container');
+            const doneIds = state.completions[today] || [];
+            
+            // 渲染 Stat Cards
+            statsContainer.innerHTML = state.categories.map(cat => {
+                const catScore = state.tasks.filter(t => t.category === cat)
+                                            .reduce((sum, t) => doneIds.includes(t.id) ? sum + t.score : sum, 0);
+                const isActive = currentFilter === cat ? 'border-emerald-500 bg-emerald-500/10' : 'border-transparent';
+                return `<div onclick="setFilter('${cat}')" class="glass-card px-4 py-2 rounded-xl border ${isActive} cursor-pointer transition-all hover:scale-105">
+                            <div class="text-[10px] text-slate-500 uppercase">${cat}</div>
+                            <div class="text-lg font-bold text-emerald-400">${catScore}</div>
+                        </div>`;
+            }).join('');
+
+            document.getElementById('clear-filter').style.display = currentFilter ? 'block' : 'none';
+            document.getElementById('quest-title').innerText = currentFilter ? `Quest: ${currentFilter}` : 'Quest Log';
+
+            if (state.tasks.length === 0) {
+                questContainer.innerHTML = `<div class="text-center text-slate-500 py-10">尚無任務。</div>`; return;
+            }
+
+            const displayCats = currentFilter ? [currentFilter] : state.categories;
+            questContainer.innerHTML = displayCats.map(cat => {
+                const catTasks = state.tasks.filter(t => t.category === cat);
+                if (catTasks.length === 0) return '';
+                return `<div class="mb-6"><h3 class="text-xs text-slate-500 mb-2 uppercase pl-2">${cat}</h3>
+                        <div class="space-y-2">${catTasks.map(t => `
+                            <label class="glass-card p-4 rounded-xl flex items-center gap-4 cursor-pointer">
+                                <input type="checkbox" class="w-5 h-5 accent-emerald-500" ${doneIds.includes(t.id) ? 'checked' : ''} onchange="toggleTask(${t.id})">
+                                <span class="flex-1">${t.name}</span><span class="text-emerald-400 font-mono">+${t.score}</span>
+                            </label>`).join('')}</div></div>`;
+            }).join('');
+            updateInsight(calculateDailyScore(today)); calculateScore();
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('history-table-body');
+            const dates = Object.keys(state.completions).sort().reverse();
+            if (dates.length === 0) { tbody.innerHTML = `<tr><td colspan="3" class="p-8 text-center text-slate-500">尚無數據</td></tr>`; return; }
+            tbody.innerHTML = dates.map(date => {
+                const doneIds = state.completions[date] || [];
+                return `<tr class="border-t border-slate-700 hover:bg-slate-800/30">
+                        <td class="p-4 font-mono text-xs text-slate-400">${date}</td>
+                        <td class="p-4 text-center"><span class="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded font-bold">${calculateDailyScore(date)}</span></td>
+                        <td class="p-4 text-slate-300 text-xs">已完成 ${doneIds.length} 個項目</td></tr>`;
+            }).join('');
+        }
+
+        function renderSettings() {
+            document.getElementById('cat-tags').innerHTML = state.categories.map(c => `
+                <div class="flex items-center bg-slate-800 px-3 py-1 rounded-full text-xs text-emerald-400 border border-emerald-500/20">
+                    <span># ${c}</span><button onclick="deleteCategory('${c}')" class="ml-2 hover:text-red-400">✕</button>
+                </div>`).join('');
+            document.getElementById('task-cat-select').innerHTML = `<option value="">選擇分類...</option>` + state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('task-manage-list').innerHTML = state.tasks.map(t => `
+                <li class="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg text-sm mb-2">
+                    <div><span class="text-xs text-emerald-500 font-mono">[${t.category}]</span><span class="ml-2">${t.name}</span></div>
+                    <div class="flex items-center gap-4"><span class="font-bold text-emerald-400">${t.score}</span><button onclick="deleteTask(${t.id})" class="text-red-500">✕</button></div>
+                </li>`).join('');
+        }
+
+        function saveState() {
+            localStorage.setItem('ds_categories', JSON.stringify(state.categories));
+            localStorage.setItem('ds_tasks', JSON.stringify(state.tasks));
+            localStorage.setItem('ds_completions', JSON.stringify(state.completions));
+        }
+
+        // 初始化
+        renderHome();
+    </script>
+</body>
+</html>
